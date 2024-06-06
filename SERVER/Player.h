@@ -2,6 +2,7 @@
 #include "Session.h"
 
 
+
 class Player : public SESSION
 {
 public:
@@ -9,13 +10,13 @@ public:
 
 
 
-	int		hp;
-	int		max_hp;
-	int		exp;
-	int		level;
+	int		hp_;
+	int		max_hp_;
+	int		exp_;
+	int		level_;
 
 public:
-	Player() : socket_(INVALID_SOCKET), hp(0), max_hp(0), exp(0), level(0) {}
+	Player() : socket_(INVALID_SOCKET), hp_(0), max_hp_(0), exp_(0), level_(0) {}
 	~Player() {}
 
 	SOCKET GetSocket() { return socket_; };

@@ -35,7 +35,7 @@ public:
 		id_ = -1;
 		x_ = y_ = 0;
 		name_[0] = 0;
-		state_ = ST_FREE;
+		state_ = OS_FREE;
 		prev_packet_.clear();
 		current_sector = { -99, -99 };
 	}
@@ -51,6 +51,8 @@ public:
 
 	virtual SOCKET GetSocket() = 0;
 	virtual void SetSocket(SOCKET socket) = 0;
+
+	void PutInSector();
 };
 
-extern std::array<SESSION, MAX_USER> clients;
+extern std::array<std::unique_ptr<SESSION>, MAX_NPC + MAX_USER> objects;

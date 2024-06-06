@@ -37,8 +37,14 @@ enum COMP_KEY
 
 enum OBJECT_STATE
 {
-	ST_FREE = 0,
-	ST_ACTIVE,
-	ST_INGAME
+	
+	OS_FREE = 0,
+	OS_ACTIVE,
+	OS_INGAME
 };
 
+enum OBJECT_TYPE
+{
+	OT_PLAYER = 0,
+	OT_NPC
+};

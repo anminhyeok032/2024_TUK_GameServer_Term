@@ -21,7 +21,7 @@ int get_new_client_id()
 		if (objects[i])
 		{
 			std::lock_guard <std::mutex> ll{ objects[i]->mut_state_ };
-			if (objects[i]->state_ == ST_FREE)
+			if (objects[i]->state_ == OS_FREE)
 			{
 				return i;
 			}
@@ -72,7 +72,7 @@ void Woker()
 			{
 				{
 					std::lock_guard<std::mutex> ll(objects[client_id]->mut_state_);
-					objects[client_id]->state_ = ST_ACTIVE;
+					objects[client_id]->state_ = OS_ACTIVE;
 				}
 				objects[client_id]->x_ = 0;
 				objects[client_id]->y_ = 0;
