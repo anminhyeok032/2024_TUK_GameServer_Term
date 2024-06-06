@@ -6,10 +6,20 @@ class Player : public SESSION
 {
 public:
 	SOCKET socket_;
-	char name_[NAME_SIZE];
+
+
+
+	int		hp;
+	int		max_hp;
+	int		exp;
+	int		level;
+
 public:
-	Player() : socket_(INVALID_SOCKET), name_() {}
+	Player() : socket_(INVALID_SOCKET), hp(0), max_hp(0), exp(0), level(0) {}
 	~Player() {}
+
+	SOCKET GetSocket() { return socket_; };
+	void SetSocket(SOCKET socket) { socket_ = socket; }
 
 	void DoReceive() override;
 	void SendLoginInfoPacket() override;
