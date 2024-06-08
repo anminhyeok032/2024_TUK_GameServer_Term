@@ -26,7 +26,10 @@ extern HANDLE g_h_iocp;
 
 //std::array<SESSION*, MAX_NPC + MAX_USER> objects;
 
-void print_error(const char* msg, int err_no);
+constexpr int VIEW_RANGE = 7;
+
+void print_error(const char* msg, int err_no);	
+bool CanSee(int curr, int other);
 
 enum COMP_KEY
 {

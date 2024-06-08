@@ -52,6 +52,9 @@ public:
 	virtual SOCKET GetSocket() = 0;
 	virtual void SetSocket(SOCKET socket) = 0;
 
+	virtual void SetActive(bool active) {}
+	virtual bool GetActive() { return false; }
+
 	void PutInSector();
 };
 

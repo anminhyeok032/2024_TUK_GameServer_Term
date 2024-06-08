@@ -12,6 +12,13 @@ OVER g_over;
 std::array<std::unique_ptr<SESSION>, MAX_NPC + MAX_USER> objects;
 
 
+// 시야가 클라이언트에 맞춰 사각형의 형태이다
+bool CanSee(int a, int b)
+{
+	int dx = std::abs(objects[a]->x_ - objects[b]->x_);
+	int dy = std::abs(objects[a]->y_ - objects[b]->y_);
+	return (dx <= VIEW_RANGE) && (dy <= VIEW_RANGE);
+}
 
 
 int get_new_client_id()
@@ -25,6 +32,11 @@ int get_new_client_id()
 			{
 				return i;
 			}
+		}
+		else
+		{
+			objects[i] = std::make_unique<Player>();
+			return i;
 		}
 	}
 	return -1;
@@ -132,16 +144,19 @@ void Woker()
 
 void InitializeObjects()
 {
-	std::cout << "=====InitializeObjects Begin=====" << std::endl;
-	//for (int i = 0; i < MAX_NPC; i++)
-	//{
-	//	objects[i] = std::make_unique<Npc>();
-	//}
-	for (int i = MAX_NPC; i < MAX_NPC + MAX_USER; ++i) 
+	std::cout << "===== Initialize NPC Begin =====" << std::endl;
+	for (int i = 0; i < MAX_NPC; i++)
 	{
-		objects[i] = std::make_unique<Player>();
+		objects[i] = std::make_unique<Npc>();
+		objects[i]->id_ = i;
+		sprintf_s(objects[i]->name_, "Peace%d", i);
+		objects[i]->x_ = rand() % W_WIDTH;
+		objects[i]->y_ = rand() % W_HEIGHT;
+		objects[i]->state_ = OS_INGAME;
+		objects[i]->SetActive(false);
 	}
-	std::cout << "=====InitializeObjects End=====" << std::endl;
+
+	std::cout << "===== Initialize NPC End =====" << std::endl;
 }
 
 int main()
