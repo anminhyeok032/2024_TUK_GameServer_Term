@@ -20,6 +20,7 @@ public:
 	~Player() {}
 
 	SOCKET GetSocket() { return socket_; };
+	void CloseSocket() { closesocket(socket_); socket_ = INVALID_SOCKET; }
 	void SetSocket(SOCKET socket) { socket_ = socket; }
 
 	void DoReceive() override;

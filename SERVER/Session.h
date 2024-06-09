@@ -2,6 +2,7 @@
 #include "OVER.h"
 
 
+
 class SESSION
 {
 public:
@@ -13,7 +14,8 @@ public:
 	char name_[NAME_SIZE];
 
 	// 섹터 정보와 뷰리스트
-	std::pair<int, int> current_sector;
+	std::pair<int, int> current_sector_;
+	std::set<std::pair<int, int>> around_sector_;
 	std::unordered_set<int> view_list_;
 
 	// packet 재조립
@@ -37,7 +39,7 @@ public:
 		name_[0] = 0;
 		state_ = OS_FREE;
 		prev_packet_.clear();
-		current_sector = { -99, -99 };
+		current_sector_ = { -99, -99 };
 	}
 	~SESSION() {}
 
@@ -51,6 +53,7 @@ public:
 
 	virtual SOCKET GetSocket() = 0;
 	virtual void SetSocket(SOCKET socket) = 0;
+	virtual void CloseSocket() = 0;
 
 	virtual void SetActive(bool active) {}
 	virtual bool GetActive() { return false; }

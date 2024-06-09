@@ -11,16 +11,17 @@ public:
 	~Npc() {}
 
 
-	void DoReceive() override;
-	void SendLoginInfoPacket() override;
-	void DoSend(void* packet) override;
-	void SendMovePacket(int c_id) override;
-	void SendAddObjectPacket(int c_id) override;
-	void SendRemoveObjectPacket(int c_id) override;
-	void ProcessPacket(char* packet) override;
+	void DoReceive() {}
+	void SendLoginInfoPacket() {}
+	void DoSend(void* packet) {}
+	void SendMovePacket(int c_id) {}
+	void SendAddObjectPacket(int c_id) {}
+	void SendRemoveObjectPacket(int c_id) {}
+	void ProcessPacket(char* packet) {}
 
-	SOCKET GetSocket() override;
-	void SetSocket(SOCKET socket) override;
+	SOCKET GetSocket() { return SOCKET(); }
+	void SetSocket(SOCKET socket) {}
+	void CloseSocket() {}
 
 	void SetActive(bool active) { active_ = active; }
 	bool GetActive() { return active_; }

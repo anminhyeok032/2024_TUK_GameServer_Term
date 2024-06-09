@@ -10,7 +10,7 @@ SOCKET g_server_socket, g_client_socket;
 HANDLE g_h_iocp;
 OVER g_over;
 std::array<std::unique_ptr<SESSION>, MAX_NPC + MAX_USER> objects;
-
+std::map <std::pair<int, int>, Sector> g_ObjectSector;
 
 // 시야가 클라이언트에 맞춰 사각형의 형태이다
 bool CanSee(int a, int b)
@@ -20,8 +20,14 @@ bool CanSee(int a, int b)
 	return (dx <= VIEW_RANGE) && (dy <= VIEW_RANGE);
 }
 
+bool IsNpc(int a)
+{
+	return a < MAX_NPC;
+}
 
-int get_new_client_id()
+
+
+int GetNewClientId()
 {
 	for (int i = MAX_NPC; i < MAX_NPC + MAX_USER; ++i) 
 	{
@@ -61,7 +67,7 @@ void Woker()
 			else 
 			{
 				std::cout << "Error : GQCS error Client [" << key << "]" << std::endl;
-				//disconnect(key);
+				disconnect(key);
 				if (ex_over->comp_key_ == SEND) delete ex_over;
 				continue;
 			}
@@ -70,8 +76,9 @@ void Woker()
 		{
 			if ((ex_over->comp_key_ == RECV) || (ex_over->comp_key_ == SEND))
 			{
-				std::cout << "Error : bytes == 0" << std::endl;
-				//disconnect(key);
+				std::cout << "Error : Client [" << key << "]" << std::endl;
+				disconnect(key);
+				if (ex_over->comp_key_ == SEND) delete ex_over;
 				continue;
 			}
 		}
@@ -79,7 +86,7 @@ void Woker()
 		switch (ex_over->comp_key_) {
 		case ACCEPT:
 		{
-			int client_id = get_new_client_id();
+			int client_id = GetNewClientId();
 			if (client_id != -1)
 			{
 				{
@@ -92,6 +99,7 @@ void Woker()
 				objects[client_id]->name_[0] = 0;
 				objects[client_id]->prev_packet_.clear();
 				objects[client_id]->SetSocket(g_client_socket);
+				objects[client_id]->PutInSector();
 				CreateIoCompletionPort(reinterpret_cast<HANDLE>(g_client_socket),
 					g_h_iocp, client_id, 0);
 				objects[client_id]->DoReceive();
@@ -142,6 +150,47 @@ void Woker()
 	}
 }
 
+void disconnect(int c_id)
+{
+	for (auto& sector : objects[c_id]->around_sector_)
+	{
+		for (auto& id : g_ObjectSector[sector].sec_id_)
+		{
+			{
+				std::lock_guard<std::mutex> ll(objects[id]->mut_state_);
+				if (OS_INGAME != objects[id]->state_) continue;
+			}
+			if (objects[id]->id_ == c_id) continue;
+			if (IsNpc(objects[id]->id_)) continue;
+			// 눈에 보이는 애들에게만 보냄
+			if (true == CanSee(objects[id]->id_, c_id)) continue;
+			objects[id]->SendRemoveObjectPacket(c_id);
+		}
+	}
+	objects[c_id]->CloseSocket();
+
+	{
+		std::lock_guard<std::mutex> ll(objects[c_id]->mut_state_);
+		objects[c_id]->state_ = OS_FREE;
+	}
+	objects[c_id]->current_sector_ = { -99, -99 };
+	objects[c_id]->around_sector_.clear();
+	objects[c_id]->name_[0] = 0;
+
+	// 섹터에서 로그아웃한 id 삭제
+	for (auto& sector : g_ObjectSector)
+	{
+		std::lock_guard<std::mutex> ll (sector.second.mut_sector_);
+		{
+			if (sector.second.sec_id_.find(c_id) != sector.second.sec_id_.end()) {
+				// 기존 섹터에서 플레이어 정보를 삭제
+				sector.second.sec_id_.erase(c_id);
+				break;
+			}
+		}
+	}
+}
+
 void InitializeObjects()
 {
 	std::cout << "===== Initialize NPC Begin =====" << std::endl;
@@ -154,6 +203,11 @@ void InitializeObjects()
 		objects[i]->y_ = rand() % W_HEIGHT;
 		objects[i]->state_ = OS_INGAME;
 		objects[i]->SetActive(false);
+
+		std::pair<int, int> new_sector = { objects[i]->x_ / SEC_ROW, objects[i]->y_ / SEC_COL };
+		objects[i]->current_sector_ = new_sector;
+		g_ObjectSector[new_sector].sec_id_.insert(objects[i]->id_);
+		objects[i]->PutInSector();
 	}
 
 	std::cout << "===== Initialize NPC End =====" << std::endl;

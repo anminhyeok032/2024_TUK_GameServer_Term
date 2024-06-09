@@ -142,6 +142,9 @@
     <ClInclude Include="protocol.h" />
     <ClInclude Include="Session.h" />
   </ItemGroup>
+  <ItemGroup>
+    <Library Include="lua54.lib" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

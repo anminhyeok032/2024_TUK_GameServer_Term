@@ -98,22 +98,35 @@ void Player::ProcessPacket(char* packet)
 		{
 			CS_LOGIN_PACKET* p = reinterpret_cast<CS_LOGIN_PACKET*>(packet);
 			strcpy_s(name_, p->name);
+
+			// 자신에게 login 전송
+			// TODO : DB연결시 성공시에만 전송
+			SendLoginInfoPacket();
+			// 자신의 위치 섹터에 저장
+			PutInSector();
 			// 해당 객체 INGAME 상태로 변경
 			{
 				std::lock_guard<std::mutex> lock(mut_state_);
 				state_ = OS_INGAME;
 			}
 
-			SendLoginInfoPacket();
-			for (auto& obj : objects)
+			for (auto& sector : around_sector_)
 			{
-				if(!obj) continue;		// TODO : Empty에 대해 처리해놓았지만, 섹터 처리시 삭제할것
-				if(false == CanSee(id_, obj->id_))	continue;
-				if (obj->id_ == id_)	continue;
-				obj->SendAddObjectPacket(id_);
-				SendAddObjectPacket(obj->id_);
+				for (auto& id : g_ObjectSector[sector].sec_id_)
+				{
+					{
+						std::lock_guard<std::mutex> ll(objects[id]->mut_state_);
+						if(OS_INGAME != objects[id]->state_) continue;
+					}
+					
+					if (false == CanSee(id_, objects[id]->id_))	continue;
+					if (objects[id]->id_ == id_)	continue;	// 자기자신일때
+					objects[id]->SendAddObjectPacket(id_);
+					SendAddObjectPacket(objects[id]->id_);
+				}
 			}
-			std::cout << "Login : " << name_ << std::endl;
+
+			std::cout << "Login : [" << name_ << "]" << std::endl;
 			break;
 		}
 		case CS_MOVE:
@@ -132,15 +145,55 @@ void Player::ProcessPacket(char* packet)
 			x_ = x;
 			y_ = y;
 
-			// TODO : Sector 처리 해야함
+			// Sector 이동
+			PutInSector();
+
 			// 기존 시야에 있는 플레이어와 새로운 시야에 있는 플레이어 비교
+			mut_view_.lock();
+			std::unordered_set<int> prev_viewlist = view_list_;
+			mut_view_.unlock();
+			std::unordered_set<int> curr_viewlist;
 
+			// 자신의 around_sector에 있는 object가 시야에 보이는지 검사->curr_viewlist에 삽입
+			for (auto& sector : around_sector_)
+			{
+				for (auto& id : g_ObjectSector[sector].sec_id_)
+				{
+					{
+						std::lock_guard<std::mutex> ll(objects[id]->mut_state_);
+						if (OS_INGAME != objects[id]->state_) continue;
+					}
+					
+					if (false == CanSee(id_, objects[id]->id_))	continue;
+					if (objects[id]->id_ == id_)	continue;	// 자기자신일때
+					curr_viewlist.insert(objects[id]->id_);
+
+				}
+			}
+			// 자신에게 이동 전송
 			SendMovePacket(id_);
-			// TODO : NPC에 대한 초기화 처리를 하거나 NPC하게 못보내게 처리 할것
-			for(auto& obj : objects )
-				obj->SendMovePacket(id_);
+			// 검사한 시야를 이용해 각 오브젝트들 이동
+			for (int ano_id : curr_viewlist)
+			{
+				if (0 == prev_viewlist.count(ano_id))
+				{
+					SendAddObjectPacket(ano_id);
+					objects[ano_id]->SendAddObjectPacket(id_);
+				}
+				else
+				{
+					objects[ano_id]->SendMovePacket(id_);
+				}
+			}
+			for (int ano_id : prev_viewlist)
+			{
+				if (0 == curr_viewlist.count(ano_id))
+				{
+					SendRemoveObjectPacket(ano_id);
+					objects[ano_id]->SendRemoveObjectPacket(id_);
+				}
+			}
 
-			std::cout << "Move : " << name_ << std::endl;
 			break;
 		}
 	}
