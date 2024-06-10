@@ -43,21 +43,26 @@ public:
 	}
 	~SESSION() {}
 
-	virtual void DoReceive() = 0;
-	virtual void SendLoginInfoPacket() = 0;
-	virtual void DoSend(void* packet) = 0;
-	virtual void SendMovePacket(int c_id) = 0;
-	virtual void SendAddObjectPacket(int c_id) = 0;
-	virtual void SendRemoveObjectPacket(int c_id) = 0;
-	virtual void ProcessPacket(char* packet) = 0;
+	// Player
+	virtual void DoReceive() {};
+	virtual void SendLoginInfoPacket() {};
+	virtual void DoSend(void* packet) {};
+	virtual void SendMovePacket(int c_id) {};
+	virtual void SendAddObjectPacket(int c_id) {};
+	virtual void SendRemoveObjectPacket(int c_id) {};
+	virtual void ProcessPacket(char* packet) {};
 
-	virtual SOCKET GetSocket() = 0;
-	virtual void SetSocket(SOCKET socket) = 0;
-	virtual void CloseSocket() = 0;
+	virtual SOCKET GetSocket() { return INVALID_SOCKET; }
+	virtual void SetSocket(SOCKET socket) {};
+	virtual void CloseSocket() {};
 
+	// Npc
 	virtual void SetActive(bool active) {}
 	virtual bool GetActive() { return false; }
+	virtual bool IsPlayerExist() { return false; };
+	virtual void DoRandomMove() {};
 
+	// °øÅë
 	void PutInSector();
 };
 

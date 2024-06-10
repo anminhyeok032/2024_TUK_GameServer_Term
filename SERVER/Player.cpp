@@ -112,17 +112,21 @@ void Player::ProcessPacket(char* packet)
 
 			for (auto& sector : around_sector_)
 			{
-				for (auto& id : g_ObjectSector[sector].sec_id_)
 				{
+					// 섹터에 대한 lock
+					std::lock_guard<std::mutex> sec_l(g_ObjectSector[sector].mut_sector_);
+					for (auto& id : g_ObjectSector[sector].sec_id_)
 					{
-						std::lock_guard<std::mutex> ll(objects[id]->mut_state_);
-						if(OS_INGAME != objects[id]->state_) continue;
+						{
+							std::lock_guard<std::mutex> ll(objects[id]->mut_state_);
+							if (OS_INGAME != objects[id]->state_) continue;
+						}
+
+						if (false == CanSee(id_, objects[id]->id_))	continue;
+						if (objects[id]->id_ == id_)	continue;	// 자기자신일때
+						objects[id]->SendAddObjectPacket(id_);
+						SendAddObjectPacket(objects[id]->id_);
 					}
-					
-					if (false == CanSee(id_, objects[id]->id_))	continue;
-					if (objects[id]->id_ == id_)	continue;	// 자기자신일때
-					objects[id]->SendAddObjectPacket(id_);
-					SendAddObjectPacket(objects[id]->id_);
 				}
 			}
 
@@ -157,17 +161,21 @@ void Player::ProcessPacket(char* packet)
 			// 자신의 around_sector에 있는 object가 시야에 보이는지 검사->curr_viewlist에 삽입
 			for (auto& sector : around_sector_)
 			{
-				for (auto& id : g_ObjectSector[sector].sec_id_)
 				{
+					// 섹터에 대한 lock
+					std::lock_guard<std::mutex> sec_l(g_ObjectSector[sector].mut_sector_);
+					for (auto& id : g_ObjectSector[sector].sec_id_)
 					{
-						std::lock_guard<std::mutex> ll(objects[id]->mut_state_);
-						if (OS_INGAME != objects[id]->state_) continue;
-					}
-					
-					if (false == CanSee(id_, objects[id]->id_))	continue;
-					if (objects[id]->id_ == id_)	continue;	// 자기자신일때
-					curr_viewlist.insert(objects[id]->id_);
+						{
+							std::lock_guard<std::mutex> ll(objects[id]->mut_state_);
+							if (OS_INGAME != objects[id]->state_) continue;
+						}
 
+						if (false == CanSee(id_, objects[id]->id_))	continue;
+						if (objects[id]->id_ == id_)	continue;	// 자기자신일때
+						curr_viewlist.insert(objects[id]->id_);
+
+					}
 				}
 			}
 			// 자신에게 이동 전송

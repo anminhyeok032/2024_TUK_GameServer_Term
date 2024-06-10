@@ -11,6 +11,7 @@ HANDLE g_h_iocp;
 OVER g_over;
 std::array<std::unique_ptr<SESSION>, MAX_NPC + MAX_USER> objects;
 std::map <std::pair<int, int>, Sector> g_ObjectSector;
+concurrency::concurrent_priority_queue<EVENT> g_event_queue;
 
 // 시야가 클라이언트에 맞춰 사각형의 형태이다
 bool CanSee(int a, int b)
@@ -23,6 +24,10 @@ bool CanSee(int a, int b)
 bool IsNpc(int a)
 {
 	return a < MAX_NPC;
+}
+bool IsPlayer(int a)
+{
+	return a >= MAX_NPC;
 }
 
 
@@ -60,31 +65,32 @@ void Woker()
 		OVER* ex_over = reinterpret_cast<OVER*>(over);
 		if (FALSE == ret)
 		{
-			if (ex_over->comp_key_ == ACCEPT)
+			if (ex_over->comp_key_ == KEY_ACCEPT)
 			{
 				std::cout << "Error : Accept" << std::endl;
+				disconnect(key);
 			}
 			else 
 			{
 				std::cout << "Error : GQCS error Client [" << key << "]" << std::endl;
 				disconnect(key);
-				if (ex_over->comp_key_ == SEND) delete ex_over;
+				if (ex_over->comp_key_ == KEY_SEND) delete ex_over;
 				continue;
 			}
 		}
 		if(bytes == 0)
 		{
-			if ((ex_over->comp_key_ == RECV) || (ex_over->comp_key_ == SEND))
+			if ((ex_over->comp_key_ == KEY_RECV) || (ex_over->comp_key_ == KEY_SEND))
 			{
 				std::cout << "Error : Client [" << key << "]" << std::endl;
 				disconnect(key);
-				if (ex_over->comp_key_ == SEND) delete ex_over;
+				if (ex_over->comp_key_ == KEY_SEND) delete ex_over;
 				continue;
 			}
 		}
 
 		switch (ex_over->comp_key_) {
-		case ACCEPT:
+		case KEY_ACCEPT:
 		{
 			int client_id = GetNewClientId();
 			if (client_id != -1)
@@ -116,7 +122,7 @@ void Woker()
 			AcceptEx(g_server_socket, g_client_socket, g_over.send_buf_, 0, sizeof(SOCKADDR_IN) + 16, sizeof(SOCKADDR_IN) + 16, NULL, &g_over.over_);
 			break;
 		}
-		case RECV:
+		case KEY_RECV:
 		{
 			char* p = ex_over->send_buf_;
 
@@ -141,9 +147,22 @@ void Woker()
 			objects[key]->DoReceive();
 			break;
 		}
-		case SEND:
+		case KEY_SEND:
 		{
 			delete ex_over;
+			break;
+		}
+
+		//=======================================================
+		// AI 처리
+		//=======================================================
+		case KEY_NPC_RANDOM_MOVE:
+		{
+			int npc_id = key;
+			if (true == objects[npc_id]->IsPlayerExist())
+			{
+				objects[npc_id]->DoRandomMove();
+			}
 			break;
 		}
 		}
@@ -163,7 +182,7 @@ void disconnect(int c_id)
 			if (objects[id]->id_ == c_id) continue;
 			if (IsNpc(objects[id]->id_)) continue;
 			// 눈에 보이는 애들에게만 보냄
-			if (true == CanSee(objects[id]->id_, c_id)) continue;
+			if (false == CanSee(objects[id]->id_, c_id)) continue;
 			objects[id]->SendRemoveObjectPacket(c_id);
 		}
 	}
@@ -180,7 +199,7 @@ void disconnect(int c_id)
 	// 섹터에서 로그아웃한 id 삭제
 	for (auto& sector : g_ObjectSector)
 	{
-		std::lock_guard<std::mutex> ll (sector.second.mut_sector_);
+		std::lock_guard<std::mutex> sec_l(sector.second.mut_sector_);
 		{
 			if (sector.second.sec_id_.find(c_id) != sector.second.sec_id_.end()) {
 				// 기존 섹터에서 플레이어 정보를 삭제
@@ -213,6 +232,48 @@ void InitializeObjects()
 	std::cout << "===== Initialize NPC End =====" << std::endl;
 }
 
+
+void DoAITimer() {
+	// 이벤트 체크용 변수들
+	EVENT next_event;
+	bool has_next_event = false;
+
+	while (true) {
+		EVENT ev;
+		auto current_time = std::chrono::system_clock::now();
+
+		// 기존 시간 안된 뽑은 이벤트 있으면 ev에 넣어 먼저 처리
+		if (has_next_event) {
+			ev = next_event;
+			has_next_event = false;
+		}
+		else if (!g_event_queue.try_pop(ev)) {
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+			continue;
+		}
+
+		// try_pop으로 뽑은 이벤트가 현재 시간보다 뒤라면 next_event에 넣고 슬립
+		if (ev.wakeup_time_ > current_time) {
+			next_event = ev;
+			has_next_event = true;
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+			continue;
+		}
+
+		// 이벤트 처리 로직
+		switch (ev.e_type_) {
+		case EV_NPC_RANDOM_MOVE:
+			OVER* ov = new OVER;
+			ov->comp_key_ = KEY_NPC_RANDOM_MOVE;
+			PostQueuedCompletionStatus(g_h_iocp, 1, ev.id_, &ov->over_);
+			break;
+		}
+
+		
+	}
+}
+
+
 int main()
 {
 	std::wcout.imbue(std::locale("korean"));
@@ -233,7 +294,7 @@ int main()
 	g_h_iocp = CreateIoCompletionPort(INVALID_HANDLE_VALUE, 0, 0, 0);
 	CreateIoCompletionPort(reinterpret_cast<HANDLE>(g_server_socket), g_h_iocp, 9999, 0);
 	g_client_socket = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
-	g_over.comp_key_ = ACCEPT;
+	g_over.comp_key_ = KEY_ACCEPT;
 	AcceptEx(g_server_socket, g_client_socket, g_over.send_buf_, 0, sizeof(SOCKADDR_IN) + 16, sizeof(SOCKADDR_IN) + 16, NULL, &g_over.over_);
 
 	std::vector <std::thread> worker_threads;
