@@ -10,6 +10,7 @@ SOCKET g_server_socket, g_client_socket;
 HANDLE g_h_iocp;
 OVER g_over;
 std::array<std::unique_ptr<SESSION>, MAX_NPC + MAX_USER> objects;
+std::vector<int> g_player_list;
 std::map <std::pair<int, int>, Sector> g_ObjectSector;
 concurrency::concurrent_priority_queue<EVENT> g_event_queue;
 
@@ -109,7 +110,8 @@ void Woker()
 				CreateIoCompletionPort(reinterpret_cast<HANDLE>(g_client_socket),
 					g_h_iocp, client_id, 0);
 				objects[client_id]->DoReceive();
-
+				// 접속 플레이어 리스트에 저장
+				g_player_list.push_back(client_id);
 				// 다른 플레이어 위해 소켓 초기화
 				g_client_socket = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
 			}
@@ -195,6 +197,7 @@ void disconnect(int c_id)
 	objects[c_id]->current_sector_ = { -99, -99 };
 	objects[c_id]->around_sector_.clear();
 	objects[c_id]->name_[0] = 0;
+	g_player_list.erase(std::remove(g_player_list.begin(), g_player_list.end(), c_id), g_player_list.end());
 
 	// 섹터에서 로그아웃한 id 삭제
 	for (auto& sector : g_ObjectSector)

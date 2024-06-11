@@ -50,6 +50,7 @@ public:
 	virtual void SendMovePacket(int c_id) {};
 	virtual void SendAddObjectPacket(int c_id) {};
 	virtual void SendRemoveObjectPacket(int c_id) {};
+	virtual void SendChatPacket(int c_id, char mess[CHAT_SIZE]) {}
 	virtual void ProcessPacket(char* packet) {};
 
 	virtual SOCKET GetSocket() { return INVALID_SOCKET; }

@@ -29,6 +29,7 @@ public:
 	void SendMovePacket(int c_id) override;
 	void SendAddObjectPacket(int c_id) override;
 	void SendRemoveObjectPacket(int c_id) override;
+	void SendChatPacket(int c_id, char mess[CHAT_SIZE]) override;
 
 	void ProcessPacket(char* packet) override;
 };

@@ -4,6 +4,8 @@
 #include <unordered_map>
 #include <Windows.h>
 #include <chrono>
+#include <string>
+#include <vector>
 using namespace std;
 
 //#pragma comment (lib, "opengl32.lib")
@@ -16,10 +18,10 @@ sf::TcpSocket s_socket;
 
 constexpr int BUF_SIZE = 200;
 
-constexpr auto SCREEN_WIDTH = 16;
-constexpr auto SCREEN_HEIGHT = 16;
+constexpr auto SCREEN_WIDTH = 20;
+constexpr auto SCREEN_HEIGHT = 20;
 
-constexpr auto TILE_WIDTH = 65;
+constexpr auto TILE_WIDTH = 65 / 2;
 constexpr auto WINDOW_WIDTH = SCREEN_WIDTH * TILE_WIDTH;   // size of window
 constexpr auto WINDOW_HEIGHT = SCREEN_WIDTH * TILE_WIDTH;
 
@@ -34,6 +36,10 @@ int g_myid;
 sf::RenderWindow* g_window;
 sf::Font g_font;
 
+bool isChatActive = false;
+std::string chatInput;
+std::vector<std::string> chatHistory;
+
 class OBJECT {
 private:
 	bool m_showing;
@@ -42,13 +48,23 @@ private:
 	sf::Text m_name;
 	sf::Text m_chat;
 	chrono::system_clock::time_point m_mess_end_time;
+
 public:
 	int m_x, m_y;
 	char name[NAME_SIZE];
+
+	sf::RectangleShape hp_bar;	// hp 표시 사각형
+
 	OBJECT(sf::Texture& t, int x, int y, int x2, int y2) {
 		m_showing = false;
 		m_sprite.setTexture(t);
 		m_sprite.setTextureRect(sf::IntRect(x, y, x2, y2));
+		m_sprite.setScale(0.5, 0.5);
+
+		hp_bar.setSize(sf::Vector2f(TILE_WIDTH, 5));	// hp바 크기 설정
+		hp_bar.setFillColor(sf::Color::Red);			// hp바 색상 설정
+		hp_bar.setOutlineColor(sf::Color::Black);		// hp바 테두리 색상 설정
+		
 	}
 	OBJECT() {
 		m_showing = false;
@@ -76,26 +92,31 @@ public:
 	}
 	void draw() {
 		if (false == m_showing) return;
-		float rx = (m_x - g_left_x) * 65.0f + 1;
-		float ry = (m_y - g_top_y) * 65.0f + 1;
+		float rx = (m_x - g_left_x) * TILE_WIDTH + 1;
+		float ry = (m_y - g_top_y) * TILE_WIDTH + 1;
 		m_sprite.setPosition(rx, ry);
 		g_window->draw(m_sprite);
 		auto size = m_name.getGlobalBounds();
 
 		if (m_mess_end_time < chrono::system_clock::now()) {
-			m_name.setPosition(rx + 32 - size.width / 2, ry - 10);
+			m_name.setPosition(rx + TILE_WIDTH/2 - size.width / 2, ry - 10);
 			g_window->draw(m_name);
 		}
 		else {
-			m_chat.setPosition(rx + 32 - size.width / 2, ry - 10);
+			m_chat.setPosition(rx + TILE_WIDTH/2 - size.width / 2, ry - 10);
 			g_window->draw(m_chat);
 		}
+
+		hp_bar.setPosition(rx, ry - 10);	// hp바 위치 설정
+		g_window->draw(hp_bar);	// hp바 그리기
 	}
 	void set_name(const char str[]) {
+		strcpy_s(name, str);
 		m_name.setFont(g_font);
 		m_name.setString(str);
 		m_name.setFillColor(sf::Color(255, 255, 0));
 		m_name.setStyle(sf::Text::Bold);
+		m_name.setScale(0.5, 0.5);
 	}
 	void set_chat(const char str[])
 	{
@@ -103,6 +124,7 @@ public:
 		m_chat.setString(str);
 		m_chat.setFillColor(sf::Color(255, 255, 255));
 		m_chat.setStyle(sf::Text::Bold);
+		m_chat.setScale(0.5, 0.5);
 		m_mess_end_time = chrono::system_clock::now() + chrono::seconds(3);	// 3초동안 메세지 출력
 	}
 };
@@ -118,6 +140,13 @@ sf::Texture* pieces;
 sf::RectangleShape mapRectangle(sf::Vector2f(MAP_SIZE, MAP_SIZE));	// 맵 표시 사각형
 sf::CircleShape playerDot(5.f);										// 플레이어 표시
 
+
+sf::RectangleShape chatBox(sf::Vector2f(800, 30));
+
+
+sf::Text chatText("", g_font, 20);
+
+
 void client_initialize()
 {
 	board = new sf::Texture;
@@ -128,16 +157,25 @@ void client_initialize()
 		cout << "Font Loading Error!\n";
 		exit(-1);
 	}
-	white_tile = OBJECT{ *board, 5, 5, TILE_WIDTH, TILE_WIDTH };
-	black_tile = OBJECT{ *board, 69, 5, TILE_WIDTH, TILE_WIDTH };
+	white_tile = OBJECT{ *board, 5, 5, 64, 64 };
+	black_tile = OBJECT{ *board, 69, 5, 64, 64 };
 	avatar = OBJECT{ *pieces, 128, 0, 64, 64 };
 	avatar.move(4, 4);
+	
 
 	// MAP 생성 및 크기 설정
 	mapRectangle.setPosition(MAP_WIDTH, MAP_HEIGHT);
 	mapRectangle.setFillColor(sf::Color(255, 255, 255, 128));	// 맵 알파값 조정
 
 	playerDot.setFillColor(sf::Color::Red); // 플레이어 색상을 빨간색으로 설정
+
+	avatar.hp_bar.setPosition(avatar.m_x - (WINDOW_WIDTH / 2), avatar.m_y - (WINDOW_HEIGHT / 2) - 10);	// hp바 위치 설정
+
+	// 채팅창 설정
+	chatBox.setFillColor(sf::Color(0, 0, 0, 150));
+	chatBox.setPosition(0, 570);
+	chatText.setFillColor(sf::Color::White);
+	chatText.setPosition(5, 575);
 }
 
 void client_finish()
@@ -158,8 +196,8 @@ void ProcessPacket(char* ptr)
 		g_myid = packet->id;
 		avatar.m_x = packet->x;
 		avatar.m_y = packet->y;
-		g_left_x = packet->x - 8;
-		g_top_y = packet->y - 8;
+		g_left_x = packet->x - (SCREEN_WIDTH / 2);
+		g_top_y = packet->y - (SCREEN_HEIGHT / 2);
 		avatar.show();
 	}
 	break;
@@ -171,8 +209,8 @@ void ProcessPacket(char* ptr)
 
 		if (id == g_myid) {
 			avatar.move(my_packet->x, my_packet->y);
-			g_left_x = my_packet->x - 4;
-			g_top_y = my_packet->y - 4;
+			g_left_x = my_packet->x - (SCREEN_WIDTH / 2);
+			g_top_y = my_packet->y - (SCREEN_HEIGHT / 2);
 			avatar.show();
 		}
 		else {
@@ -189,8 +227,8 @@ void ProcessPacket(char* ptr)
 		int other_id = my_packet->id;
 		if (other_id == g_myid) {
 			avatar.move(my_packet->x, my_packet->y);
-			g_left_x = my_packet->x - 8;
-			g_top_y = my_packet->y - 8;
+			g_left_x = my_packet->x - (SCREEN_WIDTH / 2);
+			g_top_y = my_packet->y - (SCREEN_HEIGHT / 2);
 		}
 		else  {
 			players[other_id].move(my_packet->x, my_packet->y);
@@ -216,6 +254,13 @@ void ProcessPacket(char* ptr)
 	{
 		SC_CHAT_PACKET* my_packet = reinterpret_cast<SC_CHAT_PACKET*>(ptr);
 		int other_id = my_packet->id;
+
+		chatInput.clear(); 
+		std::string playerName(players[other_id].name, strnlen(players[other_id].name, sizeof(players[other_id].name)));
+		chatInput.append("[").append(playerName).append("] : ").append(my_packet->mess);
+		chatHistory.push_back(chatInput);
+		chatInput.clear();
+
 		if (other_id == g_myid)
 		{
 			avatar.set_chat(my_packet->mess);
@@ -312,6 +357,22 @@ void client_main()
 	playerDot.setPosition(MAP_WIDTH + (avatar.m_x / (2.1 * (W_WIDTH / 400))) , MAP_HEIGHT + (avatar.m_y / (2.1 * (W_HEIGHT / 400))) ); // 플레이어 위치 설정
 	g_window->draw(playerDot);		// 플레이어 위치 나타내는 점 그리기
 
+	// 채팅창 그리기
+	float yOffset = 530;
+	for (auto it = chatHistory.rbegin(); it != chatHistory.rend() && yOffset > 0; ++it) 
+	{
+		sf::Text historyText(*it, g_font, 20);
+		historyText.setFillColor(sf::Color::White);
+		historyText.setPosition(5, yOffset);
+		g_window->draw(historyText);
+		yOffset -= 25;
+	}
+	if (isChatActive) 
+	{
+		chatText.setString(chatInput);
+		g_window->draw(chatText);
+		g_window->draw(chatBox);
+	}
 }
 
 void send_packet(void *packet)
@@ -327,13 +388,13 @@ int main()
 
 	char SERVER_ADDR[BUF_SIZE];
 	char PLAYER_ID[BUF_SIZE];
-	std::cout << "Enter IP Address : ";
-	std::cin.getline(SERVER_ADDR, BUF_SIZE);
+	//std::cout << "Enter IP Address : ";
+	//std::cin.getline(SERVER_ADDR, BUF_SIZE);
 	std::cout << "Enter Player ID : ";
 	std::cin.getline(PLAYER_ID, BUF_SIZE);
-	sf::Socket::Status status = s_socket.connect(SERVER_ADDR, PORT_NUM);
+	//sf::Socket::Status status = s_socket.connect(SERVER_ADDR, PORT_NUM);
 	
-	//sf::Socket::Status status = s_socket.connect("127.0.0.1", PORT_NUM);
+	sf::Socket::Status status = s_socket.connect("127.0.0.1", PORT_NUM);
 	s_socket.setBlocking(false);
 
 	if (status == sf::Socket::Done)
@@ -364,6 +425,8 @@ int main()
 	sf::RenderWindow window(sf::VideoMode(WINDOW_WIDTH, WINDOW_HEIGHT), "2D CLIENT");
 	g_window = &window;
 
+
+
 	while (window.isOpen())
 	{
 		sf::Event event;
@@ -389,17 +452,53 @@ int main()
 				case sf::Keyboard::Escape:
 					window.close();
 					break;
+				case sf::Keyboard::Enter:
+					if (isChatActive) {
+						
+						// chatting packet
+						CS_CHAT_PACKET p;
+						p.size = sizeof(p);
+						p.type = CS_CHAT;
+						strcpy_s(p.mess, chatInput.c_str());
+						send_packet(&p);
+
+						chatInput.clear();
+
+						cout << avatar.name << endl;
+						std::string avatarName(avatar.name, strnlen(avatar.name, sizeof(avatar.name)));
+						cout << avatarName << endl;
+						
+						chatInput.append("[").append(avatarName).append("] : ").append(p.mess);
+						chatHistory.push_back(chatInput);
+						chatInput.clear();
+						isChatActive = false;
+					}
+					else {
+						isChatActive = true;
+					}
+					break;
 				}
-				if (-1 != direction) {
+				if (direction != -1 && !isChatActive) {
 					CS_MOVE_PACKET p;
 					p.size = sizeof(p);
 					p.type = CS_MOVE;
 					p.direction = direction;
 					send_packet(&p);
 				}
-
+			}
+			if (isChatActive && event.type == sf::Event::TextEntered) {
+				if (event.text.unicode == '\b') {
+					if (!chatInput.empty()) {
+						chatInput.pop_back();
+					}
+				}
+				else if (event.text.unicode < 128 && event.text.unicode != '\r') { // 엔터키 제외
+					chatInput += static_cast<char>(event.text.unicode);
+				}
 			}
 		}
+
+
 
 		window.clear();
 		client_main();

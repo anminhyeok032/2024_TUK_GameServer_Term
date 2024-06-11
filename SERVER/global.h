@@ -32,6 +32,7 @@ struct Sector
 	std::mutex mut_sector_;
 };
 extern std::map <std::pair<int, int>, Sector> g_ObjectSector;
+extern std::vector<int> g_player_list;
 
 constexpr int VIEW_RANGE = 5;
 constexpr int SEC_RANGE = VIEW_RANGE;

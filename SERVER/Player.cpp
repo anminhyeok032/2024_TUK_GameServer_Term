@@ -88,6 +88,16 @@ void Player::SendRemoveObjectPacket(int c_id)
 	DoSend(&packet);
 }
 
+void Player::SendChatPacket(int c_id, char mess[CHAT_SIZE])
+{
+	SC_CHAT_PACKET packet;
+	packet.size = sizeof(SC_CHAT_PACKET);
+	packet.type = SC_CHAT;
+	packet.id = c_id;
+	strcpy_s(packet.mess, mess);
+	DoSend(&packet);
+}
+
 
 void Player::ProcessPacket(char* packet)
 {
@@ -202,6 +212,18 @@ void Player::ProcessPacket(char* packet)
 				}
 			}
 
+			break;
+		}
+		case CS_CHAT:
+		{
+			CS_CHAT_PACKET* p = reinterpret_cast<CS_CHAT_PACKET*>(packet);
+			std::cout << "Chat : [" << name_ << "] : " << p->mess << std::endl;
+			
+			for (auto& player : g_player_list)
+			{
+				if (player == id_) continue;
+				objects[player]->SendChatPacket(id_, p->mess);
+			}
 			break;
 		}
 	}
