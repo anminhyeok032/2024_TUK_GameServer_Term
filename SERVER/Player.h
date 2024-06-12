@@ -8,15 +8,11 @@ class Player : public SESSION
 public:
 	SOCKET socket_;
 
-
-
-	int		hp_;
-	int		max_hp_;
 	int		exp_;
 	int		level_;
 
 public:
-	Player() : socket_(INVALID_SOCKET), hp_(0), max_hp_(0), exp_(0), level_(0) {}
+	Player() : socket_(INVALID_SOCKET), exp_(0), level_(0) {}
 	~Player() {}
 
 	SOCKET GetSocket() { return socket_; };
@@ -30,6 +26,8 @@ public:
 	void SendAddObjectPacket(int c_id) override;
 	void SendRemoveObjectPacket(int c_id) override;
 	void SendChatPacket(int c_id, char mess[CHAT_SIZE]) override;
+	void SendAttackPacket(int attacker_id, int damaged_id, int hp, bool alive) override;
+	void SendStatChangePacket() override;
 
 	void ProcessPacket(char* packet) override;
 };

@@ -23,6 +23,7 @@ constexpr char SC_REMOVE_OBJECT = 5;
 constexpr char SC_MOVE_OBJECT = 6;
 constexpr char SC_CHAT = 7;
 constexpr char SC_STAT_CHANGE = 8;
+constexpr char SC_ATTACK = 9;			// 공격 표현위해 추가
 
 #pragma pack (push, 1)
 struct CS_LOGIN_PACKET {
@@ -52,6 +53,13 @@ struct CS_TELEPORT_PACKET {			// 랜덤으로 텔레포트 하는 패킷, 동접 테스트에 필요
 struct CS_LOGOUT_PACKET {
 	unsigned short size;
 	char	type;
+};
+
+// 공격 방향 구현 위해 추가
+struct CS_ATTACK_PACKET {
+	unsigned short size;
+	char	type;
+	char	attack_direction;  // 0 : UP, 1 : DOWN, 2 : LEFT, 3 : RIGHT, 4 : 4방향 공격
 };
 
 struct SC_LOGIN_INFO_PACKET {
@@ -111,4 +119,12 @@ struct SC_STAT_CHANGE_PACKET {
 
 };
 
+struct SC_ATTACK_PACKET {
+	unsigned short size;
+	char	type;
+	int		attacker_id;
+	int		damaged_id;
+	int		hp;
+	unsigned char damaged_state; // 0 : alive, 1 : dead
+};
 #pragma pack (pop)

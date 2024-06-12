@@ -8,6 +8,7 @@
 #include <map>
 #include <set>
 #include <vector>
+#include <string>
 #include <concurrent_priority_queue.h>
 
 #include <thread>
@@ -59,7 +60,8 @@ enum OBJECT_STATE
 {
 	OS_FREE = 0,
 	OS_ACTIVE,
-	OS_INGAME
+	OS_INGAME,
+	OS_DEAD
 };
 
 enum OBJECT_TYPE
@@ -89,6 +91,7 @@ struct EVENT
 		return this->wakeup_time_ > other.wakeup_time_;
 	}
 };
+
 // lock-free thread-safe 우선순위 큐
 // clear는 thread-safe하지 않음
 extern concurrency::concurrent_priority_queue<EVENT> g_event_queue;

@@ -10,6 +10,7 @@ public:
 	OVER recv_over_;
 	int id_;
 	short x_, y_;
+	int max_hp_, hp_;
 	int visual_;
 	char name_[NAME_SIZE];
 
@@ -36,6 +37,7 @@ public:
 	{
 		id_ = -1;
 		x_ = y_ = 0;
+		hp_ = max_hp_ = visual_ = 0;
 		name_[0] = 0;
 		state_ = OS_FREE;
 		prev_packet_.clear();
@@ -51,6 +53,8 @@ public:
 	virtual void SendAddObjectPacket(int c_id) {};
 	virtual void SendRemoveObjectPacket(int c_id) {};
 	virtual void SendChatPacket(int c_id, char mess[CHAT_SIZE]) {}
+	virtual void SendStatChangePacket() {};
+	virtual void SendAttackPacket(int attacker_id, int damaged_id, int hp, bool alive) {}
 	virtual void ProcessPacket(char* packet) {};
 
 	virtual SOCKET GetSocket() { return INVALID_SOCKET; }

@@ -249,7 +249,36 @@ void ProcessPacket(char* ptr)
 
 		break;
 	}
+	case SC_STAT_CHANGE:
+	{
+		SC_STAT_CHANGE_PACKET* my_packet = reinterpret_cast<SC_STAT_CHANGE_PACKET*>(ptr);
+		avatar.hp_bar.setSize(sf::Vector2f(my_packet->hp, 5));	// hp바 크기 설정
+		break;
+	}
+	case SC_ATTACK:
+	{
+		SC_ATTACK_PACKET* p = reinterpret_cast<SC_ATTACK_PACKET*>(ptr);
+		bool is_dead = static_cast<bool>(p->damaged_state);
 
+		std::string mess;
+
+		if(is_dead == false) // 데미지를 받았을 때
+		{
+			// 내가 때렸을 때
+			if(p->attacker_id == g_myid)
+				mess.append("You attack ").append(players[p->damaged_id].name).append(" to give 10 damage.");
+			else if(p->damaged_id == g_myid) // 내가 맞았을 때
+				mess.append(players[p->attacker_id].name).append("attack you to give 10 damage.");
+			else
+				mess.append(players[p->attacker_id].name).append("attack ").append(players[p->damaged_id].name).append(" to give 10 damage.");
+		}
+		else // 죽었을 때
+		{
+			mess.append(players[p->attacker_id].name).append("가 ").append(players[p->damaged_id].name).append("를 때려서 죽였습니다.");
+		}
+		chatHistory.push_back(mess);
+		break;
+	}
 	case SC_CHAT:
 	{
 		SC_CHAT_PACKET* my_packet = reinterpret_cast<SC_CHAT_PACKET*>(ptr);
@@ -264,6 +293,10 @@ void ProcessPacket(char* ptr)
 		if (other_id == g_myid)
 		{
 			avatar.set_chat(my_packet->mess);
+		}
+		else if (other_id == -1)
+		{
+
 		}
 		else
 		{
@@ -359,6 +392,8 @@ void client_main()
 
 	// 채팅창 그리기
 	float yOffset = 530;
+	// 5개 이상의 채팅이 쌓이면 가장 오래된 채팅부터 지워줌
+	if (chatHistory.size() > 5) chatHistory.erase(chatHistory.begin());
 	for (auto it = chatHistory.rbegin(); it != chatHistory.rend() && yOffset > 0; ++it) 
 	{
 		sf::Text historyText(*it, g_font, 20);
@@ -418,15 +453,14 @@ int main()
 	strcpy_s(p.name, PLAYER_ID);
 	send_packet(&p);
 
-	
 
 	avatar.set_name(p.name);
 
 	sf::RenderWindow window(sf::VideoMode(WINDOW_WIDTH, WINDOW_HEIGHT), "2D CLIENT");
 	g_window = &window;
 
-
-
+	
+	int attack_directioin = -1;
 	while (window.isOpen())
 	{
 		sf::Event event;
@@ -436,18 +470,27 @@ int main()
 				window.close();
 			if (event.type == sf::Event::KeyPressed) {
 				int direction = -1;
+				
+				bool isAttacking = false;
 				switch (event.key.code) {
 				case sf::Keyboard::Left:
-					direction = 2;
+					direction = attack_directioin = 2;
 					break;
 				case sf::Keyboard::Right:
-					direction = 3;
+					direction = attack_directioin = 3;
 					break;
 				case sf::Keyboard::Up:
-					direction = 0;
+					direction = attack_directioin = 0;
 					break;
 				case sf::Keyboard::Down:
-					direction = 1;
+					direction = attack_directioin = 1;
+					break;
+				case sf::Keyboard::A:
+					isAttacking = true;
+					attack_directioin = 4;
+					break;
+				case sf::Keyboard::S:
+					isAttacking = true;
 					break;
 				case sf::Keyboard::Escape:
 					window.close();
@@ -462,12 +505,12 @@ int main()
 						strcpy_s(p.mess, chatInput.c_str());
 						send_packet(&p);
 
-						chatInput.clear();
+						// 머리위에 메세지 출력
+						avatar.set_chat(p.mess);
 
-						cout << avatar.name << endl;
+						// 메세지 창에 저장
+						chatInput.clear();
 						std::string avatarName(avatar.name, strnlen(avatar.name, sizeof(avatar.name)));
-						cout << avatarName << endl;
-						
 						chatInput.append("[").append(avatarName).append("] : ").append(p.mess);
 						chatHistory.push_back(chatInput);
 						chatInput.clear();
@@ -478,6 +521,7 @@ int main()
 					}
 					break;
 				}
+				// move packet
 				if (direction != -1 && !isChatActive) {
 					CS_MOVE_PACKET p;
 					p.size = sizeof(p);
@@ -485,6 +529,17 @@ int main()
 					p.direction = direction;
 					send_packet(&p);
 				}
+				// attack packet
+				if(attack_directioin != -1 && !isChatActive && isAttacking)
+				{
+					CS_ATTACK_PACKET p;
+					p.size = sizeof(p);
+					p.type = CS_ATTACK;
+					p.attack_direction = attack_directioin;
+					send_packet(&p);
+					attack_directioin = -1;
+				}
+
 			}
 			if (isChatActive && event.type == sf::Event::TextEntered) {
 				if (event.text.unicode == '\b') {

@@ -98,6 +98,29 @@ void Player::SendChatPacket(int c_id, char mess[CHAT_SIZE])
 	DoSend(&packet);
 }
 
+void Player::SendStatChangePacket()
+{
+	SC_STAT_CHANGE_PACKET packet;
+	packet.size = sizeof(SC_STAT_CHANGE_PACKET);
+	packet.type = SC_STAT_CHANGE;
+	packet.hp = hp_;
+	packet.max_hp = max_hp_;
+	packet.exp = exp_;
+	packet.level = level_;
+	DoSend(&packet);
+}
+
+void Player::SendAttackPacket(int attacker_id, int damaged_id, int hp, bool alive)
+{
+	SC_ATTACK_PACKET packet;
+	packet.size = sizeof(SC_ATTACK_PACKET);
+	packet.type = SC_ATTACK;
+	packet.attacker_id = attacker_id;
+	packet.damaged_id = damaged_id;
+	packet.hp = hp;
+	packet.damaged_state = alive ? 0 : 1;
+	DoSend(&packet);
+}
 
 void Player::ProcessPacket(char* packet)
 {
@@ -143,6 +166,7 @@ void Player::ProcessPacket(char* packet)
 			std::cout << "Login : [" << name_ << "]" << std::endl;
 			break;
 		}
+		// 이동 패킷 처리
 		case CS_MOVE:
 		{
 			CS_MOVE_PACKET* p = reinterpret_cast<CS_MOVE_PACKET*>(packet);
@@ -214,6 +238,7 @@ void Player::ProcessPacket(char* packet)
 
 			break;
 		}
+		// 채팅 패킷 처리
 		case CS_CHAT:
 		{
 			CS_CHAT_PACKET* p = reinterpret_cast<CS_CHAT_PACKET*>(packet);
@@ -224,6 +249,109 @@ void Player::ProcessPacket(char* packet)
 				if (player == id_) continue;
 				objects[player]->SendChatPacket(id_, p->mess);
 			}
+			break;
+		}
+		// 공격처리
+		case CS_ATTACK:
+		{
+			CS_ATTACK_PACKET* p = reinterpret_cast<CS_ATTACK_PACKET*>(packet);
+			std::vector<std::pair<short, short>> attack_coord;
+			short attack_x = x_;
+			short attack_y = y_;
+			switch (p->attack_direction) {
+			case 0:		// UP
+				if (attack_y > 0)
+				{
+					attack_y--;
+					attack_coord.emplace_back(attack_x, attack_y);
+				}
+				break;
+			case 1:		// DOWN
+				if (attack_y < W_HEIGHT - 1)
+				{
+					attack_y++;
+					attack_coord.emplace_back(attack_x, attack_y);
+				}
+				break;
+			case 2:		// LEFT
+				if (attack_x > 0)
+				{
+					attack_x--;
+					attack_coord.emplace_back(attack_x, attack_y);
+				}
+				break;
+			case 3:		// RIGHT
+				if (attack_x < W_WIDTH - 1)
+				{
+					attack_x++;
+					attack_coord.emplace_back(attack_x, attack_y);
+				}
+				break;
+			case 4:		// 4방향 공격
+			{
+				const std::array<std::pair<short, short>, 4> directions = 
+				{
+				std::make_pair(0, -1),  // UP
+				std::make_pair(0, 1),   // DOWN
+				std::make_pair(-1, 0),  // LEFT
+				std::make_pair(1, 0)    // RIGHT
+				};
+
+				for (const auto& direction : directions)
+				{
+					short x = attack_x + direction.first;
+					short y = attack_y + direction.second;
+
+					if (x >= 0 && x < W_WIDTH && y >= 0 && y < W_HEIGHT) 
+					{
+						attack_coord.emplace_back(x, y);
+					}
+				}
+				break;
+			}
+			}
+			
+			// 공격 판정
+			for(const auto& coord : attack_coord)
+			{
+				for (auto& sector : g_ObjectSector)
+				{
+					std::lock_guard<std::mutex> lock(sector.second.mut_sector_);
+					for (auto& id : sector.second.sec_id_)
+					{
+						bool is_dead = false;
+						if (id == id_) continue;
+						{
+							std::lock_guard<std::mutex> ll(objects[id]->mut_state_);
+							if (OS_INGAME != objects[id]->state_) continue;
+						}
+						if (objects[id]->x_ == coord.first && objects[id]->y_ == coord.second)
+						{
+							// 공격 판정
+							objects[id]->hp_ -= 10;
+							objects[id]->SendStatChangePacket();
+
+							if (objects[id]->hp_ <= 0)
+							{
+								// 죽음 처리
+								objects[id]->hp_ = 0;
+								objects[id]->state_ = OS_DEAD;
+								objects[id]->SendRemoveObjectPacket(id);
+								SendRemoveObjectPacket(id);
+								is_dead = true;
+							}
+							// TODO: 경험치 판정이 들어가야함
+							// 공격 판정 브로드 캐스팅
+							for (auto& player : g_player_list)
+							{
+								objects[player]->SendAttackPacket(id_, objects[id]->id_, objects[id]->hp_, is_dead);
+							}
+							
+						}
+					}
+				}
+			}
+
 			break;
 		}
 	}
