@@ -54,6 +54,8 @@ public:
 	char name[NAME_SIZE];
 
 	sf::RectangleShape hp_bar;	// hp 표시 사각형
+	int max_hp = 50;
+	int hp = max_hp;
 
 	OBJECT(sf::Texture& t, int x, int y, int x2, int y2) {
 		m_showing = false;
@@ -61,7 +63,7 @@ public:
 		m_sprite.setTextureRect(sf::IntRect(x, y, x2, y2));
 		m_sprite.setScale(0.5, 0.5);
 
-		hp_bar.setSize(sf::Vector2f(TILE_WIDTH, 5));	// hp바 크기 설정
+		hp_bar.setSize(sf::Vector2f((static_cast<float>(hp) / max_hp) * TILE_WIDTH , 5));	// hp바 크기 설정
 		hp_bar.setFillColor(sf::Color::Red);			// hp바 색상 설정
 		hp_bar.setOutlineColor(sf::Color::Black);		// hp바 테두리 색상 설정
 		
@@ -252,7 +254,8 @@ void ProcessPacket(char* ptr)
 	case SC_STAT_CHANGE:
 	{
 		SC_STAT_CHANGE_PACKET* my_packet = reinterpret_cast<SC_STAT_CHANGE_PACKET*>(ptr);
-		avatar.hp_bar.setSize(sf::Vector2f(my_packet->hp, 5));	// hp바 크기 설정
+		avatar.hp = my_packet->hp;
+		avatar.hp_bar.setSize(sf::Vector2f((static_cast<float>(avatar.hp) / avatar.max_hp) * TILE_WIDTH , 5));	// hp바 크기 설정
 		break;
 	}
 	case SC_ATTACK:
@@ -264,17 +267,39 @@ void ProcessPacket(char* ptr)
 
 		if(is_dead == false) // 데미지를 받았을 때
 		{
+			int damage = players[p->damaged_id].hp - p->hp;
+			players[p->damaged_id].hp = p->hp;
+			players[p->damaged_id].hp_bar.setSize(sf::Vector2f((static_cast<float>(p->hp) / players[p->damaged_id].max_hp) * TILE_WIDTH, 5));	// hp바 크기 설정
+
 			// 내가 때렸을 때
-			if(p->attacker_id == g_myid)
-				mess.append("You attack ").append(players[p->damaged_id].name).append(" to give 10 damage.");
-			else if(p->damaged_id == g_myid) // 내가 맞았을 때
-				mess.append(players[p->attacker_id].name).append("attack you to give 10 damage.");
-			else
-				mess.append(players[p->attacker_id].name).append("attack ").append(players[p->damaged_id].name).append(" to give 10 damage.");
+			if (p->attacker_id == g_myid)
+			{
+				mess.append("You attack ")
+					.append(players[p->damaged_id].name)
+					.append(" to give ")
+					.append(std::to_string(damage))
+					.append(" damage.");
+			}
+			else if (p->damaged_id == g_myid) // 내가 맞았을 때
+			{
+				mess.append(players[p->attacker_id].name)
+					.append("attack you to give ")
+					.append(std::to_string(damage))
+					.append(" damage.");
+			}
+			else // 다른 사람이 때렸을 때
+			{
+				mess.append(players[p->attacker_id].name)
+					.append("attack ")
+					.append(players[p->damaged_id].name)
+					.append(" to give ")
+					.append(std::to_string(damage))
+					.append(" damage.");
+			}
 		}
 		else // 죽었을 때
 		{
-			mess.append(players[p->attacker_id].name).append("가 ").append(players[p->damaged_id].name).append("를 때려서 죽였습니다.");
+			mess.append(players[p->attacker_id].name).append("is killed ").append(players[p->damaged_id].name).append(" and getting EXP - ");
 		}
 		chatHistory.push_back(mess);
 		break;
@@ -460,7 +485,7 @@ int main()
 	g_window = &window;
 
 	
-	int attack_directioin = -1;
+	int attack_directioin = 1;
 	while (window.isOpen())
 	{
 		sf::Event event;
@@ -470,8 +495,8 @@ int main()
 				window.close();
 			if (event.type == sf::Event::KeyPressed) {
 				int direction = -1;
-				
-				bool isAttacking = false;
+				int attack_range = -1;
+				bool is_direction_attack = false;
 				switch (event.key.code) {
 				case sf::Keyboard::Left:
 					direction = attack_directioin = 2;
@@ -486,18 +511,17 @@ int main()
 					direction = attack_directioin = 1;
 					break;
 				case sf::Keyboard::A:
-					isAttacking = true;
-					attack_directioin = 4;
+					is_direction_attack = false;
+					attack_range = 4;
 					break;
 				case sf::Keyboard::S:
-					isAttacking = true;
+					is_direction_attack = true;
 					break;
 				case sf::Keyboard::Escape:
 					window.close();
 					break;
 				case sf::Keyboard::Enter:
 					if (isChatActive) {
-						
 						// chatting packet
 						CS_CHAT_PACKET p;
 						p.size = sizeof(p);
@@ -529,25 +553,37 @@ int main()
 					p.direction = direction;
 					send_packet(&p);
 				}
-				// attack packet
-				if(attack_directioin != -1 && !isChatActive && isAttacking)
+				// 한쪽 방향 기본공격 attack packet
+				if(attack_directioin != -1 && !isChatActive && is_direction_attack)
 				{
 					CS_ATTACK_PACKET p;
 					p.size = sizeof(p);
 					p.type = CS_ATTACK;
 					p.attack_direction = attack_directioin;
 					send_packet(&p);
-					attack_directioin = -1;
+				}
+				// 범위 공격 attack packet
+				else if(attack_range != -1 && !isChatActive && !is_direction_attack)
+				{
+					CS_ATTACK_PACKET p;
+					p.size = sizeof(p);
+					p.type = CS_ATTACK;
+					p.attack_direction = attack_directioin;
+					p.attack_direction = attack_range;
+					send_packet(&p);
 				}
 
 			}
-			if (isChatActive && event.type == sf::Event::TextEntered) {
+			//채팅창 입력
+			if (isChatActive && event.type == sf::Event::TextEntered) 
+			{
 				if (event.text.unicode == '\b') {
 					if (!chatInput.empty()) {
 						chatInput.pop_back();
 					}
 				}
-				else if (event.text.unicode < 128 && event.text.unicode != '\r') { // 엔터키 제외
+				else if (event.text.unicode < 128 && event.text.unicode != '\r')  // 엔터키 제외
+				{
 					chatInput += static_cast<char>(event.text.unicode);
 				}
 			}

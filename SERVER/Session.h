@@ -54,7 +54,7 @@ public:
 	virtual void SendRemoveObjectPacket(int c_id) {};
 	virtual void SendChatPacket(int c_id, char mess[CHAT_SIZE]) {}
 	virtual void SendStatChangePacket() {};
-	virtual void SendAttackPacket(int attacker_id, int damaged_id, int hp, bool alive) {}
+	virtual void SendAttackPacket(int attacker_id, int damaged_id) {}
 	virtual void ProcessPacket(char* packet) {};
 
 	virtual SOCKET GetSocket() { return INVALID_SOCKET; }

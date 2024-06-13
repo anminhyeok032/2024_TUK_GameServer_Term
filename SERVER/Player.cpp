@@ -110,15 +110,15 @@ void Player::SendStatChangePacket()
 	DoSend(&packet);
 }
 
-void Player::SendAttackPacket(int attacker_id, int damaged_id, int hp, bool alive)
+void Player::SendAttackPacket(int attacker_id, int damaged_id)
 {
 	SC_ATTACK_PACKET packet;
 	packet.size = sizeof(SC_ATTACK_PACKET);
 	packet.type = SC_ATTACK;
 	packet.attacker_id = attacker_id;
 	packet.damaged_id = damaged_id;
-	packet.hp = hp;
-	packet.damaged_state = alive ? 0 : 1;
+	packet.hp = objects[damaged_id]->hp_;
+	packet.damaged_state = (objects[damaged_id]->hp_ <= 0) ? 1 : 0;
 	DoSend(&packet);
 }
 
@@ -258,6 +258,9 @@ void Player::ProcessPacket(char* packet)
 			std::vector<std::pair<short, short>> attack_coord;
 			short attack_x = x_;
 			short attack_y = y_;
+			// 기본 방향 공격 데미지 10, 범위공격 데미지 5
+			int damage = 10;
+
 			switch (p->attack_direction) {
 			case 0:		// UP
 				if (attack_y > 0)
@@ -296,7 +299,7 @@ void Player::ProcessPacket(char* packet)
 				std::make_pair(-1, 0),  // LEFT
 				std::make_pair(1, 0)    // RIGHT
 				};
-
+				damage = 5;
 				for (const auto& direction : directions)
 				{
 					short x = attack_x + direction.first;
@@ -314,40 +317,38 @@ void Player::ProcessPacket(char* packet)
 			// 공격 판정
 			for(const auto& coord : attack_coord)
 			{
-				for (auto& sector : g_ObjectSector)
+				// 공격 위치에 대한 섹터를 돌면서 검사함
+				std::pair<int, int> sector_key = { coord.first / SEC_ROW, coord.second / SEC_COL };
+				auto& sector = g_ObjectSector[sector_key];
+				std::lock_guard<std::mutex> lock(sector.mut_sector_);
+				for (auto& id : sector.sec_id_)
 				{
-					std::lock_guard<std::mutex> lock(sector.second.mut_sector_);
-					for (auto& id : sector.second.sec_id_)
+					if (id == id_) continue;
 					{
-						bool is_dead = false;
-						if (id == id_) continue;
-						{
-							std::lock_guard<std::mutex> ll(objects[id]->mut_state_);
-							if (OS_INGAME != objects[id]->state_) continue;
-						}
-						if (objects[id]->x_ == coord.first && objects[id]->y_ == coord.second)
-						{
-							// 공격 판정
-							objects[id]->hp_ -= 10;
-							objects[id]->SendStatChangePacket();
+						std::lock_guard<std::mutex> ll(objects[id]->mut_state_);
+						if (OS_INGAME != objects[id]->state_) continue;
+					}
+					if (objects[id]->x_ == coord.first && objects[id]->y_ == coord.second)
+					{
+						// 공격 판정
+						objects[id]->hp_ -= damage;
+						objects[id]->SendStatChangePacket();
 
-							if (objects[id]->hp_ <= 0)
-							{
-								// 죽음 처리
-								objects[id]->hp_ = 0;
-								objects[id]->state_ = OS_DEAD;
-								objects[id]->SendRemoveObjectPacket(id);
-								SendRemoveObjectPacket(id);
-								is_dead = true;
-							}
-							// TODO: 경험치 판정이 들어가야함
-							// 공격 판정 브로드 캐스팅
-							for (auto& player : g_player_list)
-							{
-								objects[player]->SendAttackPacket(id_, objects[id]->id_, objects[id]->hp_, is_dead);
-							}
-							
+						if (objects[id]->hp_ <= 0)
+						{
+							// 죽음 처리
+							objects[id]->hp_ = 0;
+							objects[id]->state_ = OS_DEAD;
+							objects[id]->SendRemoveObjectPacket(id);
+							SendRemoveObjectPacket(id);
 						}
+						// TODO: 경험치 판정이 들어가야함
+						// 공격 판정 브로드 캐스팅
+						for (auto& player : g_player_list)
+						{
+							objects[player]->SendAttackPacket(id_, objects[id]->id_);
+						}
+							
 					}
 				}
 			}

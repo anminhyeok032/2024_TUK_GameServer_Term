@@ -224,6 +224,7 @@ void InitializeObjects()
 		objects[i]->x_ = rand() % W_WIDTH;
 		objects[i]->y_ = rand() % W_HEIGHT;
 		objects[i]->state_ = OS_INGAME;
+		objects[i]->hp_ = 50;
 		objects[i]->SetActive(false);
 
 		std::pair<int, int> new_sector = { objects[i]->x_ / SEC_ROW, objects[i]->y_ / SEC_COL };
