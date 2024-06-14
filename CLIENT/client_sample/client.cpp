@@ -144,10 +144,10 @@ sf::CircleShape playerDot(5.f);										// 플레이어 표시
 
 
 sf::RectangleShape chatBox(sf::Vector2f(800, 30));
-
-
 sf::Text chatText("", g_font, 20);
 
+sf::RectangleShape Avatar_HP_Bar(sf::Vector2f(2000, 50));	// hp 표시 사각형
+sf::RectangleShape Avatar_EXP_Bar(sf::Vector2f(50, 5));	// hp 표시 사각형
 
 void client_initialize()
 {
@@ -172,6 +172,12 @@ void client_initialize()
 	playerDot.setFillColor(sf::Color::Red); // 플레이어 색상을 빨간색으로 설정
 
 	avatar.hp_bar.setPosition(avatar.m_x - (WINDOW_WIDTH / 2), avatar.m_y - (WINDOW_HEIGHT / 2) - 10);	// hp바 위치 설정
+
+
+	Avatar_HP_Bar.setSize(sf::Vector2f((static_cast<float>(avatar.hp) / avatar.max_hp) * 200, 30));	// hp바 크기 설정
+	Avatar_HP_Bar.setFillColor(sf::Color::Red);			// hp바 색상 설정
+	Avatar_HP_Bar.setOutlineColor(sf::Color::Black);		// hp바 테두리 색상 설정
+	Avatar_HP_Bar.setPosition(WINDOW_WIDTH / 2 - 200/2, 10);	// avatar hp바 위치 설정
 
 	// 채팅창 설정
 	chatBox.setFillColor(sf::Color(0, 0, 0, 150));
@@ -271,6 +277,7 @@ void ProcessPacket(char* ptr)
 			players[p->damaged_id].hp = p->hp;
 			players[p->damaged_id].hp_bar.setSize(sf::Vector2f((static_cast<float>(p->hp) / players[p->damaged_id].max_hp) * TILE_WIDTH, 5));	// hp바 크기 설정
 
+			cout << players[p->damaged_id].name << " &&  " << players[p->attacker_id].hp << endl;
 			// 내가 때렸을 때
 			if (p->attacker_id == g_myid)
 			{
@@ -283,14 +290,14 @@ void ProcessPacket(char* ptr)
 			else if (p->damaged_id == g_myid) // 내가 맞았을 때
 			{
 				mess.append(players[p->attacker_id].name)
-					.append("attack you to give ")
+					.append(" attack you to give ")
 					.append(std::to_string(damage))
 					.append(" damage.");
 			}
 			else // 다른 사람이 때렸을 때
 			{
 				mess.append(players[p->attacker_id].name)
-					.append("attack ")
+					.append(" attack ")
 					.append(players[p->damaged_id].name)
 					.append(" to give ")
 					.append(std::to_string(damage))
@@ -299,7 +306,27 @@ void ProcessPacket(char* ptr)
 		}
 		else // 죽었을 때
 		{
-			mess.append(players[p->attacker_id].name).append("is killed ").append(players[p->damaged_id].name).append(" and getting EXP - ");
+			// 내가 죽였을 때
+			if (p->attacker_id == g_myid)
+			{
+				mess.append("You killed ")
+					.append(players[p->damaged_id].name)
+					.append("  and get EXP : ");
+			}
+			// 내가 죽으면
+			else if (p->damaged_id == g_myid)
+			{
+				mess.append(players[p->attacker_id].name)
+					.append("killed you and lose EXP - ");
+			}
+			else // 다른 사람이 죽였을 때
+			{
+				mess.append(players[p->attacker_id].name)
+					.append(" killed ")
+					.append(players[p->damaged_id].name)
+					.append(" and get EXP - ");
+			}
+			
 		}
 		chatHistory.push_back(mess);
 		break;
@@ -386,12 +413,13 @@ void client_main()
 		if (received > 0) process_data(net_buf, received);
 
 	for (int i = 0; i < SCREEN_WIDTH; ++i)
+	{
 		for (int j = 0; j < SCREEN_HEIGHT; ++j)
 		{
 			int tile_x = i + g_left_x;
 			int tile_y = j + g_top_y;
 			if ((tile_x < 0) || (tile_y < 0)) continue;
-			if (0 ==(tile_x /3 + tile_y /3) % 2) {
+			if (0 == (tile_x / 3 + tile_y / 3) % 2) {
 				white_tile.a_move(TILE_WIDTH * i, TILE_WIDTH * j);
 				white_tile.a_draw();
 			}
@@ -401,6 +429,7 @@ void client_main()
 				black_tile.a_draw();
 			}
 		}
+	}
 	avatar.draw();
 	for (auto& pl : players) pl.second.draw();
 	sf::Text text;
@@ -414,6 +443,8 @@ void client_main()
 	g_window->draw(mapRectangle);	// MAP 그리기
 	playerDot.setPosition(MAP_WIDTH + (avatar.m_x / (2.1 * (W_WIDTH / 400))) , MAP_HEIGHT + (avatar.m_y / (2.1 * (W_HEIGHT / 400))) ); // 플레이어 위치 설정
 	g_window->draw(playerDot);		// 플레이어 위치 나타내는 점 그리기
+
+	g_window->draw(Avatar_HP_Bar);	// 상단 hp바 그리기
 
 	// 채팅창 그리기
 	float yOffset = 530;

@@ -60,6 +60,7 @@ void Player::SendMovePacket(int c_id)
 
 void Player::SendAddObjectPacket(int c_id)
 {
+	// 자신의 뷰리스트 갱신
 	mut_view_.lock();
 	view_list_.insert(c_id);
 	mut_view_.unlock();
@@ -324,6 +325,7 @@ void Player::ProcessPacket(char* packet)
 				for (auto& id : sector.sec_id_)
 				{
 					if (id == id_) continue;
+					if (true == IsPlayer(id)) continue;
 					{
 						std::lock_guard<std::mutex> ll(objects[id]->mut_state_);
 						if (OS_INGAME != objects[id]->state_) continue;
@@ -334,25 +336,29 @@ void Player::ProcessPacket(char* packet)
 						objects[id]->hp_ -= damage;
 						objects[id]->SendStatChangePacket();
 
+						// TODO: 경험치 판정이 들어가야함
+						// 공격 판정 맞는 사람 입장 view_list 브로드 캐스팅
+						for (auto& view_list : objects[id]->view_list_)
+						{
+							objects[view_list]->SendAttackPacket(id_, objects[id]->id_);
+						}
+
 						if (objects[id]->hp_ <= 0)
 						{
 							// 죽음 처리
 							objects[id]->hp_ = 0;
 							objects[id]->state_ = OS_DEAD;
-							objects[id]->SendRemoveObjectPacket(id);
-							SendRemoveObjectPacket(id);
+							// Npc의 뷰리스트에 있는 Player한테만 보냄
+							for (auto& view_list : objects[id]->view_list_)
+							{
+								objects[view_list]->SendRemoveObjectPacket(id);
+							}
 						}
-						// TODO: 경험치 판정이 들어가야함
-						// 공격 판정 브로드 캐스팅
-						for (auto& player : g_player_list)
-						{
-							objects[player]->SendAttackPacket(id_, objects[id]->id_);
-						}
+						
 							
 					}
 				}
 			}
-
 			break;
 		}
 	}
