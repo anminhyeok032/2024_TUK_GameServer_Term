@@ -10,6 +10,7 @@
 #include <vector>
 #include <string>
 #include <concurrent_priority_queue.h>
+#include <concurrent_queue.h>
 
 #include <thread>
 #include <mutex>
@@ -20,6 +21,11 @@
 #pragma comment(lib, "WS2_32.lib")
 #pragma comment(lib, "MSWSock.lib")
 #pragma comment(lib, "lua54.lib")
+
+#include <windows.h>  
+#include <sqlext.h>  
+#define NAME_LEN 50  
+#define PHONE_LEN 60
 
 //// global 변수
 constexpr int BUF_SIZE = 200;
@@ -45,6 +51,24 @@ bool CanSee(int curr, int other);
 bool IsNpc(int a);
 bool IsPlayer(int a);
 void disconnect(int c_id);
+
+
+
+// DB 수행하기 위한 struct와 queue
+struct DBRequest
+{
+	enum DB_Type { LOGIN, LOGOUT } db_type;
+	int id;
+};
+extern concurrency::concurrent_queue<DBRequest> g_db_request_queue;
+
+// DB
+void DisplayDBError(SQLHANDLE hHandle, SQLSMALLINT hType, RETCODE RetCode);
+SQLHDBC ConnectWithDataBase();
+SQLHSTMT AllocateStatement(SQLHDBC hdbc);
+void DBWoker(SQLHDBC hdbc);
+void ProcessDBRequest(const DBRequest& request, SQLHDBC& hdbc);
+
 
 enum COMP_KEY
 {

@@ -40,6 +40,14 @@ void Player::SendLoginInfoPacket()
 	DoSend(&packet);
 }
 
+void Player::SendLoginFailPacket()
+{
+	SC_LOGIN_FAIL_PACKET packet;
+	packet.size = sizeof(SC_LOGIN_FAIL_PACKET);
+	packet.type = SC_LOGIN_FAIL;
+	DoSend(&packet);
+}
+
 void Player::DoSend(void* packet)
 {
 	OVER* sdata = new OVER{ reinterpret_cast<char*>(packet) };
@@ -111,30 +119,61 @@ void Player::SendStatChangePacket()
 	DoSend(&packet);
 }
 
-void Player::SendAttackPacket(int attacker_id, int damaged_id)
+void Player::DBLogin(SQLHDBC& hdbc)
 {
-	SC_ATTACK_PACKET packet;
-	packet.size = sizeof(SC_ATTACK_PACKET);
-	packet.type = SC_ATTACK;
-	packet.attacker_id = attacker_id;
-	packet.damaged_id = damaged_id;
-	packet.hp = objects[damaged_id]->hp_;
-	packet.damaged_state = (objects[damaged_id]->hp_ <= 0) ? 1 : 0;
-	DoSend(&packet);
-}
+	SQLHSTMT hstmt = AllocateStatement(hdbc);
+	SQLRETURN retcode;
+	SQLWCHAR dId[NAME_LEN];
+	SQLSMALLINT  d_x, d_y, d_max_hp, d_level, d_visual;
+	SQLINTEGER d_exp;
+	SQLLEN cbId = 0, cb_x = 0, cb_y = 0, cb_max_hp = 0, cb_exp = 0, cb_level = 0, cb_visual = 0;
 
-void Player::ProcessPacket(char* packet)
-{
-	switch (packet[2])
+	std::string user_id(name_);
+
+	std::wstring sql_query = L"SELECT * FROM user_term_table WHERE user_id = \'"
+		+ std::wstring(user_id.begin(), user_id.end()) + L"\'";
+
+	retcode = SQLExecDirect(hstmt, (SQLWCHAR*)sql_query.c_str(), SQL_NTS);
+
+	if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO)
 	{
-		// 로그인 패킷 처리
-		case CS_LOGIN:
-		{
-			CS_LOGIN_PACKET* p = reinterpret_cast<CS_LOGIN_PACKET*>(packet);
-			strcpy_s(name_, p->name);
+		// Bind columns
+		SQLBindCol(hstmt, 1, SQL_C_WCHAR, dId, NAME_LEN * sizeof(SQLWCHAR), &cbId);
+		SQLBindCol(hstmt, 2, SQL_C_SSHORT, &d_x, 0, &cb_x);
+		SQLBindCol(hstmt, 3, SQL_C_SSHORT, &d_y, 0, &cb_y);
+		SQLBindCol(hstmt, 4, SQL_C_SSHORT, &d_max_hp, 0, &cb_max_hp);
+		SQLBindCol(hstmt, 5, SQL_C_SLONG, &d_exp, 0, &cb_exp);
+		SQLBindCol(hstmt, 6, SQL_C_SSHORT, &d_level, 0, &cb_level);
+		SQLBindCol(hstmt, 7, SQL_C_SSHORT, &d_visual, 0, &cb_visual);
 
-			// 자신에게 login 전송
-			// TODO : DB연결시 성공시에만 전송
+
+		
+		for (auto player : g_player_list)
+		{
+			if (true == strcmp(name_,objects[player]->name_))
+			{
+				std::wcerr << L"Login Failed: Already logged in." << std::endl;
+				name_[0] = { 0, };
+				SendLoginFailPacket();
+				return;
+			}
+		}
+		retcode = SQLFetch(hstmt);
+		if (retcode == SQL_SUCCESS)
+		{
+			wprintf(L"Login Success : User ID: %s, Location X: %d, Location Y: %d\n", dId, d_x, d_y);
+			// DB에서 받은 정보 초기화
+			x_ = d_x;
+			y_ = d_y;
+			max_hp_ = d_max_hp;
+			hp_ = max_hp_;
+			exp_ = d_exp;
+			level_ = d_level;
+			visual_ = d_visual;
+
+			//===============
+			// Login 로직 시작
+			//===============
 			SendLoginInfoPacket();
 			// 자신의 위치 섹터에 저장
 			PutInSector();
@@ -163,8 +202,167 @@ void Player::ProcessPacket(char* packet)
 					}
 				}
 			}
-
 			std::cout << "Login : [" << name_ << "]" << std::endl;
+		}
+		else
+		{
+			std::wcerr << L"Login Failed: No such user ID found." << std::endl;
+			SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
+
+			// 새로운 사용자 정보를 삽입하는 쿼리 작성
+			hstmt = AllocateStatement(hdbc);
+			std::wstring insert_query = L"INSERT INTO user_term_table (user_id, user_x, user_y, user_max_hp, user_exp, user_level, user_visual) VALUES (\'"
+				+ std::wstring(user_id.begin(), user_id.end()) + L"\', 0, 0, 100, 0, 1, 0)";
+
+			retcode = SQLExecDirect(hstmt, (SQLWCHAR*)insert_query.c_str(), SQL_NTS);
+
+			if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO)
+			{
+				std::wcout << L"New user inserted successfully: User ID: " << user_id.c_str() << std::endl;
+				// 초기화된 사용자 정보 설정
+				x_ = 0;
+				y_ = 0;
+				max_hp_ = 100;
+				hp_ = max_hp_;
+				exp_ = 0;
+				level_ = 1;
+				visual_ = 0;
+
+				// 다시 로그인 로직 시작
+				SendLoginInfoPacket();
+				PutInSector();
+				{
+					std::lock_guard<std::mutex> lock(mut_state_);
+					state_ = OS_INGAME;
+				}
+
+				for (auto& sector : around_sector_)
+				{
+					std::lock_guard<std::mutex> sec_l(g_ObjectSector[sector].mut_sector_);
+					for (auto& id : g_ObjectSector[sector].sec_id_)
+					{
+						std::lock_guard<std::mutex> ll(objects[id]->mut_state_);
+						if (OS_INGAME != objects[id]->state_) continue;
+						if (false == CanSee(id_, objects[id]->id_)) continue;
+						if (objects[id]->id_ == id_) continue; // 자기자신일때
+						objects[id]->SendAddObjectPacket(id_);
+						SendAddObjectPacket(objects[id]->id_);
+					}
+				}
+				std::cout << "Login : [" << name_ << "]" << std::endl;
+			}
+			else
+			{
+				std::wcerr << L"Failed to insert new user: " << user_id.c_str() << std::endl;
+				name_[0] = { 0, };
+				SendLoginFailPacket();
+			}
+		}
+	}
+	else
+	{
+		DisplayDBError(hstmt, SQL_HANDLE_STMT, retcode);
+		name_[0] = { 0, };
+		SendLoginFailPacket();
+	}
+
+	if (hstmt) 
+	{
+		SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
+	}
+}
+
+void Player::DBLogout(SQLHDBC& hdbc)
+{
+	SQLHSTMT hstmt = AllocateStatement(hdbc);
+	SQLRETURN retcode;
+
+	std::string user_id(name_);
+
+	std::wstring sql_query = L"UPDATE user_term_table SET user_x = "
+		+ std::to_wstring(x_)
+		+ L", user_y = " + std::to_wstring(y_)
+		+ L", user_max_hp = " + std::to_wstring(max_hp_)
+		+ L", user_exp = " + std::to_wstring(exp_)
+		+ L", user_level = " + std::to_wstring(level_)
+		+ L" WHERE user_id = \'" + std::wstring(user_id.begin(), user_id.end()) + L"\'";
+
+	std::wcout << L"Executing SQL Query: " << sql_query << std::endl;
+
+	retcode = SQLExecDirect(hstmt, (SQLWCHAR*)sql_query.c_str(), SQL_NTS);
+
+	if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO)
+	{
+		std::wcout << "[" << name_ << "] : " << L"Logout successful, data saved. x = " << x_ << ", y = " << y_ << std::endl;
+		name_[0] = 0;
+	}
+	else
+	{
+		DisplayDBError(hstmt, SQL_HANDLE_STMT, retcode);
+	}
+
+	if (hstmt)
+	{
+		SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
+	}
+}
+
+void Player::SendAttackPacket(int attacker_id, int damaged_id)
+{
+	SC_ATTACK_PACKET packet;
+	packet.size = sizeof(SC_ATTACK_PACKET);
+	packet.type = SC_ATTACK;
+	packet.attacker_id = attacker_id;
+	packet.damaged_id = damaged_id;
+	packet.max_hp = objects[damaged_id]->max_hp_;
+	packet.hp = objects[damaged_id]->hp_;
+	packet.damaged_state = (objects[damaged_id]->hp_ <= 0) ? 1 : 0;
+	DoSend(&packet);
+}
+
+void Player::ProcessPacket(char* packet)
+{
+	switch (packet[2])
+	{
+		// 로그인 패킷 처리
+		case CS_LOGIN:
+		{
+			CS_LOGIN_PACKET* p = reinterpret_cast<CS_LOGIN_PACKET*>(packet);
+			strcpy_s(name_, p->name);
+			std::cout << name_ << " : name" << std::endl;
+			g_db_request_queue.push({ DBRequest::LOGIN, id_ });
+			// 자신에게 login 전송
+			// TODO : DB연결시 성공시에만 전송
+			//SendLoginInfoPacket();
+			//// 자신의 위치 섹터에 저장
+			//PutInSector();
+			//// 해당 객체 INGAME 상태로 변경
+			//{
+			//	std::lock_guard<std::mutex> lock(mut_state_);
+			//	state_ = OS_INGAME;
+			//}
+
+			//for (auto& sector : around_sector_)
+			//{
+			//	{
+			//		// 섹터에 대한 lock
+			//		std::lock_guard<std::mutex> sec_l(g_ObjectSector[sector].mut_sector_);
+			//		for (auto& id : g_ObjectSector[sector].sec_id_)
+			//		{
+			//			{
+			//				std::lock_guard<std::mutex> ll(objects[id]->mut_state_);
+			//				if (OS_INGAME != objects[id]->state_) continue;
+			//			}
+
+			//			if (false == CanSee(id_, objects[id]->id_))	continue;
+			//			if (objects[id]->id_ == id_)	continue;	// 자기자신일때
+			//			objects[id]->SendAddObjectPacket(id_);
+			//			SendAddObjectPacket(objects[id]->id_);
+			//		}
+			//	}
+			//}
+
+			//std::cout << "Login : [" << name_ << "]" << std::endl;
 			break;
 		}
 		// 이동 패킷 처리

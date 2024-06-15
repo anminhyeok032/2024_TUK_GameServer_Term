@@ -13,6 +13,7 @@ std::array<std::unique_ptr<SESSION>, MAX_NPC + MAX_USER> objects;
 std::vector<int> g_player_list;
 std::map <std::pair<int, int>, Sector> g_ObjectSector;
 concurrency::concurrent_priority_queue<EVENT> g_event_queue;
+concurrency::concurrent_queue<DBRequest> g_db_request_queue;
 
 // 시야가 클라이언트에 맞춰 사각형의 형태이다
 bool CanSee(int a, int b)
@@ -173,6 +174,7 @@ void Woker()
 
 void disconnect(int c_id)
 {
+
 	for (auto& sector : objects[c_id]->around_sector_)
 	{
 		for (auto& id : g_ObjectSector[sector].sec_id_)
@@ -189,6 +191,7 @@ void disconnect(int c_id)
 		}
 	}
 	objects[c_id]->CloseSocket();
+	g_db_request_queue.push({ DBRequest::LOGOUT, c_id });
 
 	{
 		std::lock_guard<std::mutex> ll(objects[c_id]->mut_state_);
@@ -196,7 +199,6 @@ void disconnect(int c_id)
 	}
 	objects[c_id]->current_sector_ = { -99, -99 };
 	objects[c_id]->around_sector_.clear();
-	objects[c_id]->name_[0] = 0;
 	g_player_list.erase(std::remove(g_player_list.begin(), g_player_list.end(), c_id), g_player_list.end());
 
 	// 섹터에서 로그아웃한 id 삭제
@@ -224,7 +226,9 @@ void InitializeObjects()
 		objects[i]->x_ = rand() % W_WIDTH;
 		objects[i]->y_ = rand() % W_HEIGHT;
 		objects[i]->state_ = OS_INGAME;
-		objects[i]->hp_ = 50;
+		objects[i]->level_ = rand() % 10 + 1;
+		objects[i]->max_hp_ = objects[i]->level_ * 10;
+		objects[i]->hp_ = objects[i]->max_hp_;
 		objects[i]->SetActive(false);
 
 		std::pair<int, int> new_sector = { objects[i]->x_ / SEC_ROW, objects[i]->y_ / SEC_COL };
@@ -242,7 +246,8 @@ void DoAITimer() {
 	EVENT next_event;
 	bool has_next_event = false;
 
-	while (true) {
+	while (true) 
+	{
 		EVENT ev;
 		auto current_time = std::chrono::system_clock::now();
 
@@ -305,6 +310,10 @@ int main()
 	int num_threads = std::thread::hardware_concurrency();
 
 	InitializeObjects();
+
+	// DB 스레드 생성
+	SQLHDBC hdbc = ConnectWithDataBase();
+	std::thread db_thread(DBWoker, hdbc);
 
 	// cpu 코어 개수만큼 woker 스레드 사용
 	for (int i = 0; i < num_threads; i++)

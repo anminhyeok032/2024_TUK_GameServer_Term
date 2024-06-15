@@ -275,7 +275,7 @@ void ProcessPacket(char* ptr)
 		{
 			int damage = players[p->damaged_id].hp - p->hp;
 			players[p->damaged_id].hp = p->hp;
-			players[p->damaged_id].hp_bar.setSize(sf::Vector2f((static_cast<float>(p->hp) / players[p->damaged_id].max_hp) * TILE_WIDTH, 5));	// hp바 크기 설정
+			players[p->damaged_id].hp_bar.setSize(sf::Vector2f((static_cast<float>(p->hp) / static_cast<float>(p->max_hp)) * TILE_WIDTH, 5));	// hp바 크기 설정
 
 			cout << players[p->damaged_id].name << " &&  " << players[p->attacker_id].hp << endl;
 			// 내가 때렸을 때
@@ -311,7 +311,7 @@ void ProcessPacket(char* ptr)
 			{
 				mess.append("You killed ")
 					.append(players[p->damaged_id].name)
-					.append("  and get EXP : ");
+					.append(" and get EXP : ");
 			}
 			// 내가 죽으면
 			else if (p->damaged_id == g_myid)

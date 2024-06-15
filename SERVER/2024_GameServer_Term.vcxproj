@@ -129,6 +129,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="DB.cpp" />
     <ClCompile Include="MainServer.cpp" />
     <ClCompile Include="Npc.cpp" />
     <ClCompile Include="Player.cpp" />

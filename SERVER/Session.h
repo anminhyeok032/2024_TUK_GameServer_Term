@@ -12,6 +12,7 @@ public:
 	short x_, y_;
 	int max_hp_, hp_;
 	int visual_;
+	int	level_;
 	char name_[NAME_SIZE];
 
 	// 섹터 정보와 뷰리스트
@@ -48,6 +49,7 @@ public:
 	// Player
 	virtual void DoReceive() {};
 	virtual void SendLoginInfoPacket() {};
+	virtual void SendLoginFailPacket() {};
 	virtual void DoSend(void* packet) {};
 	virtual void SendMovePacket(int c_id) {};
 	virtual void SendAddObjectPacket(int c_id) {};
@@ -56,6 +58,10 @@ public:
 	virtual void SendStatChangePacket() {};
 	virtual void SendAttackPacket(int attacker_id, int damaged_id) {}
 	virtual void ProcessPacket(char* packet) {};
+
+	virtual void DBLogin(SQLHDBC& hdbc) {};
+	virtual void DBLogout(SQLHDBC& hdbc) {};
+
 
 	virtual SOCKET GetSocket() { return INVALID_SOCKET; }
 	virtual void SetSocket(SOCKET socket) {};

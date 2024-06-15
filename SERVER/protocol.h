@@ -124,6 +124,7 @@ struct SC_ATTACK_PACKET {
 	char	type;
 	int		attacker_id;
 	int		damaged_id;
+	int		max_hp;
 	int		hp;
 	unsigned char damaged_state; // 0 : alive, 1 : dead
 };
