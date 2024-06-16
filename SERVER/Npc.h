@@ -4,6 +4,8 @@
 class Npc : public SESSION
 {
 public:
+	lua_State* L_;
+	std::mutex mut_lua_;
 	std::atomic_bool active_;
 
 public:

@@ -202,7 +202,6 @@ void Player::DBLogin(SQLHDBC& hdbc)
 					}
 				}
 			}
-			std::cout << "Login : [" << name_ << "]" << std::endl;
 		}
 		else
 		{
@@ -218,8 +217,7 @@ void Player::DBLogin(SQLHDBC& hdbc)
 
 			if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO)
 			{
-				std::wcout << L"New user inserted successfully: User ID: " << user_id.c_str() << std::endl;
-				// 초기화된 사용자 정보 설정
+				// 새로운 플레이어 정보 초기화
 				x_ = 0;
 				y_ = 0;
 				max_hp_ = 100;
@@ -228,7 +226,7 @@ void Player::DBLogin(SQLHDBC& hdbc)
 				level_ = 1;
 				visual_ = 0;
 
-				// 다시 로그인 로직 시작
+				// 로그인 로직 시작
 				SendLoginInfoPacket();
 				PutInSector();
 				{
@@ -249,7 +247,6 @@ void Player::DBLogin(SQLHDBC& hdbc)
 						SendAddObjectPacket(objects[id]->id_);
 					}
 				}
-				std::cout << "Login : [" << name_ << "]" << std::endl;
 			}
 			else
 			{
@@ -287,8 +284,6 @@ void Player::DBLogout(SQLHDBC& hdbc)
 		+ L", user_level = " + std::to_wstring(level_)
 		+ L" WHERE user_id = \'" + std::wstring(user_id.begin(), user_id.end()) + L"\'";
 
-	std::wcout << L"Executing SQL Query: " << sql_query << std::endl;
-
 	retcode = SQLExecDirect(hstmt, (SQLWCHAR*)sql_query.c_str(), SQL_NTS);
 
 	if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO)
@@ -307,7 +302,7 @@ void Player::DBLogout(SQLHDBC& hdbc)
 	}
 }
 
-void Player::SendAttackPacket(int attacker_id, int damaged_id)
+void Player::SendAttackPacket(int attacker_id, int damaged_id, int exp)
 {
 	SC_ATTACK_PACKET packet;
 	packet.size = sizeof(SC_ATTACK_PACKET);
@@ -316,7 +311,7 @@ void Player::SendAttackPacket(int attacker_id, int damaged_id)
 	packet.damaged_id = damaged_id;
 	packet.max_hp = objects[damaged_id]->max_hp_;
 	packet.hp = objects[damaged_id]->hp_;
-	packet.damaged_state = (objects[damaged_id]->hp_ <= 0) ? 1 : 0;
+	packet.exp = exp;
 	DoSend(&packet);
 }
 
@@ -329,7 +324,6 @@ void Player::ProcessPacket(char* packet)
 		{
 			CS_LOGIN_PACKET* p = reinterpret_cast<CS_LOGIN_PACKET*>(packet);
 			strcpy_s(name_, p->name);
-			std::cout << name_ << " : name" << std::endl;
 			g_db_request_queue.push({ DBRequest::LOGIN, id_ });
 			// 자신에게 login 전송
 			// TODO : DB연결시 성공시에만 전송
@@ -538,7 +532,7 @@ void Player::ProcessPacket(char* packet)
 						// 공격 판정 맞는 사람 입장 view_list 브로드 캐스팅
 						for (auto& view_list : objects[id]->view_list_)
 						{
-							objects[view_list]->SendAttackPacket(id_, objects[id]->id_);
+							objects[view_list]->SendAttackPacket(id_, objects[id]->id_, 0);
 						}
 
 						if (objects[id]->hp_ <= 0)
@@ -546,6 +540,21 @@ void Player::ProcessPacket(char* packet)
 							// 죽음 처리
 							objects[id]->hp_ = 0;
 							objects[id]->state_ = OS_DEAD;
+							int getting_exp = objects[id]->level_ * objects[id]->level_ * 2;
+							exp_ += getting_exp;
+							int required_exp = 100 * pow(2, level_ - 1);
+							if (exp_ >= required_exp)
+							{
+								level_++;
+								exp_ -= required_exp;
+								std::cout << "Level up - " << level_ << "!" << std::endl;
+							}
+							SendStatChangePacket();
+							for (auto& view_list : objects[id]->view_list_)
+							{
+								objects[view_list]->SendAttackPacket(id_, objects[id]->id_, getting_exp);
+							}
+
 							// Npc의 뷰리스트에 있는 Player한테만 보냄
 							for (auto& view_list : objects[id]->view_list_)
 							{

@@ -10,7 +10,7 @@ SOCKET g_server_socket, g_client_socket;
 HANDLE g_h_iocp;
 OVER g_over;
 std::array<std::unique_ptr<SESSION>, MAX_NPC + MAX_USER> objects;
-std::vector<int> g_player_list;
+std::unordered_set<int> g_player_list;
 std::map <std::pair<int, int>, Sector> g_ObjectSector;
 concurrency::concurrent_priority_queue<EVENT> g_event_queue;
 concurrency::concurrent_queue<DBRequest> g_db_request_queue;
@@ -31,7 +31,11 @@ bool IsPlayer(int a)
 {
 	return a >= MAX_NPC;
 }
-
+void AddTimer(int id, EVENT_TYPE type, int ms, int target_id)
+{
+	EVENT ev{ id, std::chrono::system_clock::now() + std::chrono::milliseconds(ms), type, target_id };
+	g_event_queue.push(ev);
+}
 
 
 int GetNewClientId()
@@ -112,7 +116,7 @@ void Woker()
 					g_h_iocp, client_id, 0);
 				objects[client_id]->DoReceive();
 				// 접속 플레이어 리스트에 저장
-				g_player_list.push_back(client_id);
+				g_player_list.insert(client_id);
 				// 다른 플레이어 위해 소켓 초기화
 				g_client_socket = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
 			}
@@ -199,8 +203,7 @@ void disconnect(int c_id)
 	}
 	objects[c_id]->current_sector_ = { -99, -99 };
 	objects[c_id]->around_sector_.clear();
-	g_player_list.erase(std::remove(g_player_list.begin(), g_player_list.end(), c_id), g_player_list.end());
-
+	g_player_list.erase(c_id);
 	// 섹터에서 로그아웃한 id 삭제
 	for (auto& sector : g_ObjectSector)
 	{
@@ -314,6 +317,8 @@ int main()
 	// DB 스레드 생성
 	SQLHDBC hdbc = ConnectWithDataBase();
 	std::thread db_thread(DBWoker, hdbc);
+	//ai 스레드 생성
+	std::thread ai_thread(DoAITimer);
 
 	// cpu 코어 개수만큼 woker 스레드 사용
 	for (int i = 0; i < num_threads; i++)
@@ -324,6 +329,8 @@ int main()
 	{
 		th.join();
 	}
+	db_thread.join();
+	ai_thread.join();
 	closesocket(g_server_socket);
 	WSACleanup();
 }

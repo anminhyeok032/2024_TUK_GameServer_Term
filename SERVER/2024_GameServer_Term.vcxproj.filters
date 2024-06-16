@@ -54,4 +54,9 @@
   <ItemGroup>
     <Library Include="lua54.lib" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="npc.lua">
+      <Filter>리소스 파일</Filter>
+    </None>
+  </ItemGroup>
 </Project>

@@ -56,7 +56,7 @@ public:
 	virtual void SendRemoveObjectPacket(int c_id) {};
 	virtual void SendChatPacket(int c_id, char mess[CHAT_SIZE]) {}
 	virtual void SendStatChangePacket() {};
-	virtual void SendAttackPacket(int attacker_id, int damaged_id) {}
+	virtual void SendAttackPacket(int attacker_id, int damaged_id, int exp) {}
 	virtual void ProcessPacket(char* packet) {};
 
 	virtual void DBLogin(SQLHDBC& hdbc) {};

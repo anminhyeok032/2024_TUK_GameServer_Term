@@ -56,6 +56,9 @@ public:
 	sf::RectangleShape hp_bar;	// hp 표시 사각형
 	int max_hp = 50;
 	int hp = max_hp;
+	int exp = 0;
+	int level = 1;
+
 
 	OBJECT(sf::Texture& t, int x, int y, int x2, int y2) {
 		m_showing = false;
@@ -147,7 +150,8 @@ sf::RectangleShape chatBox(sf::Vector2f(800, 30));
 sf::Text chatText("", g_font, 20);
 
 sf::RectangleShape Avatar_HP_Bar(sf::Vector2f(2000, 50));	// hp 표시 사각형
-sf::RectangleShape Avatar_EXP_Bar(sf::Vector2f(50, 5));	// hp 표시 사각형
+sf::RectangleShape Avatar_EXP_Bar(sf::Vector2f(2000, 5));	// hp 표시 사각형
+sf::Text LevelText("", g_font, 20);
 
 void client_initialize()
 {
@@ -178,6 +182,12 @@ void client_initialize()
 	Avatar_HP_Bar.setFillColor(sf::Color::Red);			// hp바 색상 설정
 	Avatar_HP_Bar.setOutlineColor(sf::Color::Black);		// hp바 테두리 색상 설정
 	Avatar_HP_Bar.setPosition(WINDOW_WIDTH / 2 - 200/2, 10);	// avatar hp바 위치 설정
+	Avatar_EXP_Bar.setSize(sf::Vector2f((static_cast<float>(avatar.exp) / (100 * pow(2, avatar.level - 1))) * 200, 10));	// hp바 크기 설정
+	Avatar_EXP_Bar.setFillColor(sf::Color::White);			// hp바 색상 설정
+	Avatar_EXP_Bar.setOutlineColor(sf::Color::Black);		// hp바 테두리 색상 설정
+	Avatar_EXP_Bar.setPosition(WINDOW_WIDTH / 2 - 200 / 2, 40);	// avatar hp바 위치 설정
+	LevelText.setFillColor(sf::Color::White);	// 레벨 텍스트 색상 설정
+	LevelText.setPosition(WINDOW_WIDTH / 2  - 50, 10);	// 레벨 텍스트 위치 설정
 
 	// 채팅창 설정
 	chatBox.setFillColor(sf::Color(0, 0, 0, 150));
@@ -206,6 +216,13 @@ void ProcessPacket(char* ptr)
 		avatar.m_y = packet->y;
 		g_left_x = packet->x - (SCREEN_WIDTH / 2);
 		g_top_y = packet->y - (SCREEN_HEIGHT / 2);
+		avatar.hp = packet->hp;
+		avatar.max_hp = packet->max_hp;
+		avatar.exp = packet->exp;
+		avatar.level = packet->level;
+		Avatar_HP_Bar.setSize(sf::Vector2f((static_cast<float>(avatar.hp) / avatar.max_hp) * 200, 30));	// hp바 크기 설정
+		Avatar_EXP_Bar.setSize(sf::Vector2f((static_cast<float>(avatar.exp) / (100 * pow(2, avatar.level - 1))) * 200, 10));	// hp바 크기 설정
+		LevelText.setString("Level : " + std::to_string(avatar.level));	// 레벨 텍스트 설정
 		avatar.show();
 	}
 	break;
@@ -262,22 +279,26 @@ void ProcessPacket(char* ptr)
 		SC_STAT_CHANGE_PACKET* my_packet = reinterpret_cast<SC_STAT_CHANGE_PACKET*>(ptr);
 		avatar.hp = my_packet->hp;
 		avatar.hp_bar.setSize(sf::Vector2f((static_cast<float>(avatar.hp) / avatar.max_hp) * TILE_WIDTH , 5));	// hp바 크기 설정
+		avatar.exp = my_packet->exp;
+		avatar.level = my_packet->level;
+		Avatar_HP_Bar.setSize(sf::Vector2f((static_cast<float>(avatar.hp) / avatar.max_hp) * 200, 30));	// hp바 크기 설정
+		Avatar_EXP_Bar.setSize(sf::Vector2f((static_cast<float>(avatar.exp) / (100 * pow(2, avatar.level - 1))) * 200, 10));	// hp바 크기 설정
+		LevelText.setString("Level : " + std::to_string(avatar.level));	// 레벨 텍스트 설정
 		break;
 	}
 	case SC_ATTACK:
 	{
 		SC_ATTACK_PACKET* p = reinterpret_cast<SC_ATTACK_PACKET*>(ptr);
-		bool is_dead = static_cast<bool>(p->damaged_state);
+		int get_exp = p->exp;
 
 		std::string mess;
 
-		if(is_dead == false) // 데미지를 받았을 때
+		if(get_exp == 0) // 데미지
 		{
 			int damage = players[p->damaged_id].hp - p->hp;
 			players[p->damaged_id].hp = p->hp;
 			players[p->damaged_id].hp_bar.setSize(sf::Vector2f((static_cast<float>(p->hp) / static_cast<float>(p->max_hp)) * TILE_WIDTH, 5));	// hp바 크기 설정
 
-			cout << players[p->damaged_id].name << " &&  " << players[p->attacker_id].hp << endl;
 			// 내가 때렸을 때
 			if (p->attacker_id == g_myid)
 			{
@@ -309,22 +330,28 @@ void ProcessPacket(char* ptr)
 			// 내가 죽였을 때
 			if (p->attacker_id == g_myid)
 			{
+				avatar.exp += p->exp;
 				mess.append("You killed ")
 					.append(players[p->damaged_id].name)
-					.append(" and get EXP : ");
+					.append(" and get EXP : ")
+					.append(std::to_string(p->exp));
 			}
 			// 내가 죽으면
 			else if (p->damaged_id == g_myid)
 			{
+				avatar.exp -= avatar.exp / 2;
 				mess.append(players[p->attacker_id].name)
-					.append("killed you and lose EXP - ");
+					.append("killed you and lose EXP - ")
+					.append(std::to_string(avatar.exp / 2));
+					
 			}
 			else // 다른 사람이 죽였을 때
 			{
 				mess.append(players[p->attacker_id].name)
 					.append(" killed ")
 					.append(players[p->damaged_id].name)
-					.append(" and get EXP - ");
+					.append(" and get EXP - ")
+					.append(std::to_string(p->exp));
 			}
 			
 		}
@@ -356,11 +383,8 @@ void ProcessPacket(char* ptr)
 		}
 		break;
 	}
-	/*case SC_LOGIN_OK:
-		std::cout << "Login 성공!!\n";
-		break;*/
 	case SC_LOGIN_FAIL:
-		std::cout << "ID가 틀렸습니다\n";
+		std::cout << "ID 접속중\n";
 		std::cout << "프로그램을 종료합니다.\n";
 		return;
 		break;
@@ -445,6 +469,9 @@ void client_main()
 	g_window->draw(playerDot);		// 플레이어 위치 나타내는 점 그리기
 
 	g_window->draw(Avatar_HP_Bar);	// 상단 hp바 그리기
+	g_window->draw(Avatar_EXP_Bar);	// 상단 exp바 그리기
+
+	g_window->draw(LevelText);		// 레벨 텍스트 그리기	
 
 	// 채팅창 그리기
 	float yOffset = 530;

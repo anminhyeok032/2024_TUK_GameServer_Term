@@ -15,6 +15,7 @@
 #include <thread>
 #include <mutex>
 #include <chrono>
+#include <cmath>
 
 #include "include/lua.hpp"
 
@@ -39,7 +40,7 @@ struct Sector
 	std::mutex mut_sector_;
 };
 extern std::map <std::pair<int, int>, Sector> g_ObjectSector;
-extern std::vector<int> g_player_list;
+extern std::unordered_set<int> g_player_list;
 
 constexpr int VIEW_RANGE = 5;
 constexpr int SEC_RANGE = VIEW_RANGE;
@@ -51,6 +52,7 @@ bool CanSee(int curr, int other);
 bool IsNpc(int a);
 bool IsPlayer(int a);
 void disconnect(int c_id);
+
 
 
 
@@ -120,4 +122,5 @@ struct EVENT
 // clear는 thread-safe하지 않음
 extern concurrency::concurrent_priority_queue<EVENT> g_event_queue;
 
+void AddTimer(int id, EVENT_TYPE type, int ms, int target_id);
 

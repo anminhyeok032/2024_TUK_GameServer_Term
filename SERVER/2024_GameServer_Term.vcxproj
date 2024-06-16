@@ -146,6 +146,9 @@
   <ItemGroup>
     <Library Include="lua54.lib" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="npc.lua" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

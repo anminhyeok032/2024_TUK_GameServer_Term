@@ -126,6 +126,6 @@ struct SC_ATTACK_PACKET {
 	int		damaged_id;
 	int		max_hp;
 	int		hp;
-	unsigned char damaged_state; // 0 : alive, 1 : dead
+	int     exp;
 };
 #pragma pack (pop)

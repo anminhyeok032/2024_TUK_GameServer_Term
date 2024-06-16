@@ -27,7 +27,7 @@ public:
 	void SendAddObjectPacket(int c_id) override;
 	void SendRemoveObjectPacket(int c_id) override;
 	void SendChatPacket(int c_id, char mess[CHAT_SIZE]) override;
-	void SendAttackPacket(int attacker_id, int damaged_id) override;
+	void SendAttackPacket(int attacker_id, int damaged_id, int exp) override;
 	void SendStatChangePacket() override;
 
 	void DBLogin(SQLHDBC& hdbc) override;
