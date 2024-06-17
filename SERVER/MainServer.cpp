@@ -11,6 +11,7 @@ HANDLE g_h_iocp;
 OVER g_over;
 std::array<std::unique_ptr<SESSION>, MAX_NPC + MAX_USER> objects;
 std::unordered_set<int> g_player_list;
+std::mutex g_mut_player_list;
 std::map <std::pair<int, int>, Sector> g_ObjectSector;
 concurrency::concurrent_priority_queue<EVENT> g_event_queue;
 concurrency::concurrent_queue<DBRequest> g_db_request_queue;
@@ -110,13 +111,16 @@ void Woker()
 				objects[client_id]->id_ = client_id;
 				objects[client_id]->name_[0] = 0;
 				objects[client_id]->prev_packet_.clear();
+				objects[client_id]->visual_ = 0;
 				objects[client_id]->SetSocket(g_client_socket);
 				objects[client_id]->PutInSector();
 				CreateIoCompletionPort(reinterpret_cast<HANDLE>(g_client_socket),
 					g_h_iocp, client_id, 0);
 				objects[client_id]->DoReceive();
 				// 접속 플레이어 리스트에 저장
+				g_mut_player_list.lock();
 				g_player_list.insert(client_id);
+				g_mut_player_list.unlock();
 				// 다른 플레이어 위해 소켓 초기화
 				g_client_socket = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
 			}
@@ -203,7 +207,11 @@ void disconnect(int c_id)
 	}
 	objects[c_id]->current_sector_ = { -99, -99 };
 	objects[c_id]->around_sector_.clear();
+
+	g_mut_player_list.lock();
 	g_player_list.erase(c_id);
+	g_mut_player_list.unlock();
+	
 	// 섹터에서 로그아웃한 id 삭제
 	for (auto& sector : g_ObjectSector)
 	{
@@ -225,7 +233,16 @@ void InitializeObjects()
 	{
 		objects[i] = std::make_unique<Npc>();
 		objects[i]->id_ = i;
-		sprintf_s(objects[i]->name_, "Peace%d", i);
+		if (i > MAX_NPC / 2)
+		{
+			sprintf_s(objects[i]->name_, "Agro %d", i);
+			objects[i]->visual_ = 1;
+		}
+		else
+		{
+			sprintf_s(objects[i]->name_, "Peace %d", i);
+			objects[i]->visual_ = 2;
+		}
 		objects[i]->x_ = rand() % W_WIDTH;
 		objects[i]->y_ = rand() % W_HEIGHT;
 		objects[i]->state_ = OS_INGAME;

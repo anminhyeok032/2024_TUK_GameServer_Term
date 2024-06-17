@@ -142,6 +142,7 @@ OBJECT black_tile;
 
 sf::Texture* board;
 sf::Texture* pieces;
+sf::Texture* Npc;
 sf::RectangleShape mapRectangle(sf::Vector2f(MAP_SIZE, MAP_SIZE));	// 맵 표시 사각형
 sf::CircleShape playerDot(5.f);										// 플레이어 표시
 
@@ -157,8 +158,10 @@ void client_initialize()
 {
 	board = new sf::Texture;
 	pieces = new sf::Texture;
+	Npc = new sf::Texture;
 	board->loadFromFile("chessmap.bmp");
 	pieces->loadFromFile("chess2.png");
+	Npc->loadFromFile("chess2_zombie.png");
 	if (false == g_font.loadFromFile("cour.ttf")) {
 		cout << "Font Loading Error!\n";
 		exit(-1);
@@ -201,6 +204,7 @@ void client_finish()
 	players.clear();
 	delete board;
 	delete pieces;
+	delete Npc;
 }
 
 void ProcessPacket(char* ptr)
@@ -239,7 +243,22 @@ void ProcessPacket(char* ptr)
 			avatar.show();
 		}
 		else {
-			players[id] = OBJECT{ *pieces, 0, 0, 64, 64 };
+			switch (my_packet->visual)
+			{
+				// Other Player
+				case 0:
+					players[id] = OBJECT{ *pieces, 192, 0, 64, 64 };
+					break;
+				// Argo Npc
+				case 1:
+					players[id] = OBJECT{ *Npc, 128, 0, 64, 64 };
+					break;
+				// Peace Npc
+				case 2:
+					players[id] = OBJECT{ *Npc, 0, 0, 64, 64 };
+					break;
+			}
+			
 			players[id].move(my_packet->x, my_packet->y);
 			players[id].set_name(my_packet->name);
 			players[id].show();

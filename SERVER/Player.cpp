@@ -150,7 +150,8 @@ void Player::DBLogin(SQLHDBC& hdbc)
 		
 		for (auto player : g_player_list)
 		{
-			if (true == strcmp(name_,objects[player]->name_))
+			if (player == id_) continue;
+			if (0 == strncmp(name_, objects[player]->name_, sizeof(name_)))
 			{
 				std::wcerr << L"Login Failed: Already logged in." << std::endl;
 				name_[0] = { 0, };

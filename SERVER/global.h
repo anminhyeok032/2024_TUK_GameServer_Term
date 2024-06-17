@@ -9,6 +9,7 @@
 #include <set>
 #include <vector>
 #include <string>
+#include <cstring>
 #include <concurrent_priority_queue.h>
 #include <concurrent_queue.h>
 
@@ -41,6 +42,7 @@ struct Sector
 };
 extern std::map <std::pair<int, int>, Sector> g_ObjectSector;
 extern std::unordered_set<int> g_player_list;
+extern std::mutex g_mut_player_list;
 
 constexpr int VIEW_RANGE = 5;
 constexpr int SEC_RANGE = VIEW_RANGE;
