@@ -14,7 +14,7 @@ void SESSION::PutInSector()
 	};
 	for (const auto& offset : offsets) 
 	{
-		around_sector_.insert({ (x_ + offset.first) / SEC_ROW, (y_ + offset.second) / SEC_COL });
+		around_sector_.insert({ (x_ + offset.first / 2) / SEC_ROW, (y_ + offset.second / 2) / SEC_COL });
 	}
 
 

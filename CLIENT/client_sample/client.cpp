@@ -12,7 +12,7 @@ using namespace std;
 //#pragma comment (lib, "winmm.lib")
 //#pragma comment (lib, "ws2_32.lib")
 
-#include "..\..\SERVER\protocol.h"
+#include "protocol.h"
 
 sf::TcpSocket s_socket;
 

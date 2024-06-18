@@ -21,7 +21,7 @@ bool CanSee(int a, int b)
 {
 	int dx = std::abs(objects[a]->x_ - objects[b]->x_);
 	int dy = std::abs(objects[a]->y_ - objects[b]->y_);
-	return (dx <= VIEW_RANGE) && (dy <= VIEW_RANGE);
+	return (dx <= VIEW_RANGE/2) && (dy <= VIEW_RANGE/2);
 }
 
 bool IsNpc(int a)
@@ -31,11 +31,6 @@ bool IsNpc(int a)
 bool IsPlayer(int a)
 {
 	return a >= MAX_NPC;
-}
-void AddTimer(int id, EVENT_TYPE type, int ms, int target_id)
-{
-	EVENT ev{ id, std::chrono::system_clock::now() + std::chrono::milliseconds(ms), type, target_id };
-	g_event_queue.push(ev);
 }
 
 
@@ -74,12 +69,12 @@ void Woker()
 		{
 			if (ex_over->comp_key_ == KEY_ACCEPT)
 			{
-				std::cout << "Error : Accept" << std::endl;
+				//std::cout << "Error : Accept" << std::endl;
 				disconnect(key);
 			}
 			else 
 			{
-				std::cout << "Error : GQCS error Client [" << key << "]" << std::endl;
+				//std::cout << "Error : GQCS error Client [" << key << "]" << std::endl;
 				disconnect(key);
 				if (ex_over->comp_key_ == KEY_SEND) delete ex_over;
 				continue;
@@ -89,7 +84,7 @@ void Woker()
 		{
 			if ((ex_over->comp_key_ == KEY_RECV) || (ex_over->comp_key_ == KEY_SEND))
 			{
-				std::cout << "Error : Client [" << key << "]" << std::endl;
+				//std::cout << "Error : Client [" << key << "]" << std::endl;
 				disconnect(key);
 				if (ex_over->comp_key_ == KEY_SEND) delete ex_over;
 				continue;
@@ -169,11 +164,8 @@ void Woker()
 		//=======================================================
 		case KEY_NPC_RANDOM_MOVE:
 		{
-			int npc_id = key;
-			if (true == objects[npc_id]->IsPlayerExist())
-			{
-				objects[npc_id]->DoRandomMove();
-			}
+			objects[key]->DoRandomMove(ex_over->ai_target_c_id_);
+			delete ex_over;
 			break;
 		}
 		}
@@ -245,6 +237,7 @@ void InitializeObjects()
 		}
 		objects[i]->x_ = rand() % W_WIDTH;
 		objects[i]->y_ = rand() % W_HEIGHT;
+		objects[i]->SetStartPos(objects[i]->x_, objects[i]->y_);
 		objects[i]->state_ = OS_INGAME;
 		objects[i]->level_ = rand() % 10 + 1;
 		objects[i]->max_hp_ = objects[i]->level_ * 10;
@@ -261,46 +254,6 @@ void InitializeObjects()
 }
 
 
-void DoAITimer() {
-	// 이벤트 체크용 변수들
-	EVENT next_event;
-	bool has_next_event = false;
-
-	while (true) 
-	{
-		EVENT ev;
-		auto current_time = std::chrono::system_clock::now();
-
-		// 기존 시간 안된 뽑은 이벤트 있으면 ev에 넣어 먼저 처리
-		if (has_next_event) {
-			ev = next_event;
-			has_next_event = false;
-		}
-		else if (!g_event_queue.try_pop(ev)) {
-			std::this_thread::sleep_for(std::chrono::milliseconds(1));
-			continue;
-		}
-
-		// try_pop으로 뽑은 이벤트가 현재 시간보다 뒤라면 next_event에 넣고 슬립
-		if (ev.wakeup_time_ > current_time) {
-			next_event = ev;
-			has_next_event = true;
-			std::this_thread::sleep_for(std::chrono::milliseconds(1));
-			continue;
-		}
-
-		// 이벤트 처리 로직
-		switch (ev.e_type_) {
-		case EV_NPC_RANDOM_MOVE:
-			OVER* ov = new OVER;
-			ov->comp_key_ = KEY_NPC_RANDOM_MOVE;
-			PostQueuedCompletionStatus(g_h_iocp, 1, ev.id_, &ov->over_);
-			break;
-		}
-
-		
-	}
-}
 
 
 int main()
@@ -335,7 +288,7 @@ int main()
 	SQLHDBC hdbc = ConnectWithDataBase();
 	std::thread db_thread(DBWoker, hdbc);
 	//ai 스레드 생성
-	std::thread ai_thread(DoAITimer);
+	//std::thread ai_thread(DoAITimer);
 
 	// cpu 코어 개수만큼 woker 스레드 사용
 	for (int i = 0; i < num_threads; i++)
@@ -347,7 +300,7 @@ int main()
 		th.join();
 	}
 	db_thread.join();
-	ai_thread.join();
+	//ai_thread.join();
 	closesocket(g_server_socket);
 	WSACleanup();
 }

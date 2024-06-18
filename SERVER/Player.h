@@ -9,7 +9,7 @@ public:
 	SOCKET socket_;
 
 	int		exp_;
-
+	std::chrono::system_clock::time_point  last_action_time_;
 
 public:
 	Player() : socket_(INVALID_SOCKET), exp_(0) {}

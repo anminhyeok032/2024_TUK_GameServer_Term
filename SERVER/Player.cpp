@@ -154,15 +154,16 @@ void Player::DBLogin(SQLHDBC& hdbc)
 			if (0 == strncmp(name_, objects[player]->name_, sizeof(name_)))
 			{
 				std::wcerr << L"Login Failed: Already logged in." << std::endl;
-				name_[0] = { 0, };
+				
 				SendLoginFailPacket();
+				SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
 				return;
 			}
 		}
 		retcode = SQLFetch(hstmt);
 		if (retcode == SQL_SUCCESS)
 		{
-			wprintf(L"Login Success : User ID: %s, Location X: %d, Location Y: %d\n", dId, d_x, d_y);
+			//wprintf(L"Login Success : User ID: %s, Location X: %d, Location Y: %d\n", dId, d_x, d_y);
 			// DB에서 받은 정보 초기화
 			x_ = d_x;
 			y_ = d_y;
@@ -206,7 +207,7 @@ void Player::DBLogin(SQLHDBC& hdbc)
 		}
 		else
 		{
-			std::wcerr << L"Login Failed: No such user ID found." << std::endl;
+			//std::wcerr << L"Login Failed: No such user ID found." << std::endl;
 			SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
 
 			// 새로운 사용자 정보를 삽입하는 쿼리 작성
@@ -325,39 +326,9 @@ void Player::ProcessPacket(char* packet)
 		{
 			CS_LOGIN_PACKET* p = reinterpret_cast<CS_LOGIN_PACKET*>(packet);
 			strcpy_s(name_, p->name);
+			last_action_time_ = std::chrono::system_clock::now();
 			g_db_request_queue.push({ DBRequest::LOGIN, id_ });
-			// 자신에게 login 전송
-			// TODO : DB연결시 성공시에만 전송
-			//SendLoginInfoPacket();
-			//// 자신의 위치 섹터에 저장
-			//PutInSector();
-			//// 해당 객체 INGAME 상태로 변경
-			//{
-			//	std::lock_guard<std::mutex> lock(mut_state_);
-			//	state_ = OS_INGAME;
-			//}
 
-			//for (auto& sector : around_sector_)
-			//{
-			//	{
-			//		// 섹터에 대한 lock
-			//		std::lock_guard<std::mutex> sec_l(g_ObjectSector[sector].mut_sector_);
-			//		for (auto& id : g_ObjectSector[sector].sec_id_)
-			//		{
-			//			{
-			//				std::lock_guard<std::mutex> ll(objects[id]->mut_state_);
-			//				if (OS_INGAME != objects[id]->state_) continue;
-			//			}
-
-			//			if (false == CanSee(id_, objects[id]->id_))	continue;
-			//			if (objects[id]->id_ == id_)	continue;	// 자기자신일때
-			//			objects[id]->SendAddObjectPacket(id_);
-			//			SendAddObjectPacket(objects[id]->id_);
-			//		}
-			//	}
-			//}
-
-			//std::cout << "Login : [" << name_ << "]" << std::endl;
 			break;
 		}
 		// 이동 패킷 처리
@@ -365,6 +336,9 @@ void Player::ProcessPacket(char* packet)
 		{
 			CS_MOVE_PACKET* p = reinterpret_cast<CS_MOVE_PACKET*>(packet);
 			last_move_time_ = p->move_time;
+			if (last_action_time_ + std::chrono::seconds(1) > std::chrono::system_clock::now())
+				break;
+			last_action_time_ = std::chrono::system_clock::now();
 			short x = x_;
 			short y = y_;
 			switch (p->direction) {
@@ -449,6 +423,11 @@ void Player::ProcessPacket(char* packet)
 		case CS_ATTACK:
 		{
 			CS_ATTACK_PACKET* p = reinterpret_cast<CS_ATTACK_PACKET*>(packet);
+
+			if (last_action_time_ + std::chrono::seconds(1) > std::chrono::system_clock::now())
+				break;
+			last_action_time_ = std::chrono::system_clock::now();
+
 			std::vector<std::pair<short, short>> attack_coord;
 			short attack_x = x_;
 			short attack_y = y_;

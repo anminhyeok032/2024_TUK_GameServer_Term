@@ -44,10 +44,10 @@ extern std::map <std::pair<int, int>, Sector> g_ObjectSector;
 extern std::unordered_set<int> g_player_list;
 extern std::mutex g_mut_player_list;
 
-constexpr int VIEW_RANGE = 5;
+constexpr int VIEW_RANGE = 15;
 constexpr int SEC_RANGE = VIEW_RANGE;
-constexpr int SEC_ROW = 10;
-constexpr int SEC_COL = 10;
+constexpr int SEC_ROW = 15;
+constexpr int SEC_COL = 15;
 
 void print_error(const char* msg, int err_no);	
 bool CanSee(int curr, int other);
@@ -125,4 +125,6 @@ struct EVENT
 extern concurrency::concurrent_priority_queue<EVENT> g_event_queue;
 
 void AddTimer(int id, EVENT_TYPE type, int ms, int target_id);
-
+void DoAITimer();
+int API_get_xy(lua_State* L);
+int API_Attack(lua_State* L);

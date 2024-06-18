@@ -142,6 +142,9 @@
   <ItemGroup>
     <Font Include="cour.ttf" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="protocol.h" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets" />
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">

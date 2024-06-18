@@ -71,7 +71,9 @@ public:
 	virtual void SetActive(bool active) {}
 	virtual bool GetActive() { return false; }
 	virtual bool IsPlayerExist() { return false; };
-	virtual void DoRandomMove() {};
+	virtual void DoRandomMove(int target_id) {};
+	virtual void WakeUpNpc(int p_id) {};
+	virtual void SetStartPos(int x, int y) {}
 
 	// °øÅë
 	void PutInSector();
