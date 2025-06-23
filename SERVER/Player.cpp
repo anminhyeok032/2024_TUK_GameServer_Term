@@ -18,7 +18,7 @@ void Player::DoReceive()
 	DWORD recv_flag = 0;
 	memset(&recv_over_.over_, 0, sizeof(recv_over_.over_));
 	recv_over_.wsabuf_.buf = recv_over_.send_buf_ + prev_packet_.size();
-	recv_over_.wsabuf_.len = BUF_SIZE - prev_packet_.size();
+	recv_over_.wsabuf_.len = BUF_SIZE - static_cast<ULONG>(prev_packet_.size());
 	WSARecv(socket_, &recv_over_.wsabuf_, 1, 0, &recv_flag, 
 		&recv_over_.over_, 0);
 	
@@ -406,6 +406,12 @@ void Player::ProcessPacket(char* packet)
 
 			break;
 		}
+		case CS_TELEPORT:
+		{
+			x_ = rand() % W_WIDTH;
+			y_ = rand() % W_HEIGHT;
+			break;
+		}
 		// 채팅 패킷 처리
 		case CS_CHAT:
 		{
@@ -522,7 +528,7 @@ void Player::ProcessPacket(char* packet)
 							objects[id]->state_ = OS_DEAD;
 							int getting_exp = objects[id]->level_ * objects[id]->level_ * 2;
 							exp_ += getting_exp;
-							int required_exp = 100 * pow(2, level_ - 1);
+							int required_exp = static_cast<int>(100 * pow(2, level_ - 1));
 							if (exp_ >= required_exp)
 							{
 								level_++;

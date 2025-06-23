@@ -70,12 +70,12 @@ void Woker()
 			if (ex_over->comp_key_ == KEY_ACCEPT)
 			{
 				//std::cout << "Error : Accept" << std::endl;
-				disconnect(key);
+				disconnect(static_cast<int>(key));
 			}
 			else 
 			{
 				//std::cout << "Error : GQCS error Client [" << key << "]" << std::endl;
-				disconnect(key);
+				disconnect(static_cast<int>(key));
 				if (ex_over->comp_key_ == KEY_SEND) delete ex_over;
 				continue;
 			}
@@ -85,7 +85,7 @@ void Woker()
 			if ((ex_over->comp_key_ == KEY_RECV) || (ex_over->comp_key_ == KEY_SEND))
 			{
 				//std::cout << "Error : Client [" << key << "]" << std::endl;
-				disconnect(key);
+				disconnect(static_cast<int>(key));
 				if (ex_over->comp_key_ == KEY_SEND) delete ex_over;
 				continue;
 			}
@@ -132,7 +132,7 @@ void Woker()
 		{
 			char* p = ex_over->send_buf_;
 
-			int total_data = bytes + objects[key]->prev_packet_.size();
+			int total_data = bytes + static_cast<int>(objects[key]->prev_packet_.size());
 
 			auto& buffer = objects[key]->prev_packet_;
 			buffer.insert(buffer.end(), ex_over->send_buf_, ex_over->send_buf_ + bytes);
