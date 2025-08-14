@@ -15,6 +15,7 @@ std::mutex g_mut_player_list;
 std::map <std::pair<int, int>, Sector> g_ObjectSector;
 concurrency::concurrent_priority_queue<EVENT> g_event_queue;
 concurrency::concurrent_queue<DBRequest> g_db_request_queue;
+ObjectPool<OVER> g_sendPool(1000); // Send Pool
 
 // 시야가 클라이언트에 맞춰 사각형의 형태이다
 bool CanSee(int a, int b)
@@ -56,7 +57,7 @@ int GetNewClientId()
 }
 
 
-void Woker()
+void Worker()
 {
 	while (true)
 	{
@@ -76,7 +77,8 @@ void Woker()
 			{
 				//std::cout << "Error : GQCS error Client [" << key << "]" << std::endl;
 				disconnect(key);
-				if (ex_over->comp_key_ == KEY_SEND) delete ex_over;
+				if (ex_over->comp_key_ == KEY_SEND) 			// delete ex_over;
+					g_sendPool.Release(ex_over);
 				continue;
 			}
 		}
@@ -86,7 +88,8 @@ void Woker()
 			{
 				//std::cout << "Error : Client [" << key << "]" << std::endl;
 				disconnect(key);
-				if (ex_over->comp_key_ == KEY_SEND) delete ex_over;
+				if (ex_over->comp_key_ == KEY_SEND) 			// delete ex_over;
+					g_sendPool.Release(ex_over);
 				continue;
 			}
 		}
@@ -139,7 +142,9 @@ void Woker()
 
 			while (buffer.size() > 0)
 			{
-				int packet_size = static_cast<int>(p[0]);
+				// 첫 2바이트를 통해 패킷 크기 계산
+				uint16_t packet_size = static_cast<uint16_t>(buffer[0]) |
+					(static_cast<uint16_t>(buffer[1]) << 8);
 				if (packet_size <= buffer.size())
 				{
 					objects[key]->ProcessPacket(buffer.data());
@@ -155,7 +160,8 @@ void Woker()
 		}
 		case KEY_SEND:
 		{
-			delete ex_over;
+			// delete ex_over;
+			g_sendPool.Release(ex_over);
 			break;
 		}
 
@@ -165,7 +171,8 @@ void Woker()
 		case KEY_NPC_RANDOM_MOVE:
 		{
 			objects[key]->DoRandomMove(ex_over->ai_target_c_id_);
-			delete ex_over;
+			// delete ex_over;
+			g_sendPool.Release(ex_over);
 			break;
 		}
 		}
@@ -253,7 +260,15 @@ void InitializeObjects()
 	std::cout << "===== Initialize NPC End =====" << std::endl;
 }
 
-
+// 메모리풀 정리 스레드
+void PoolManagerThread() 
+{
+	while (true) 
+	{
+		std::this_thread::sleep_for(std::chrono::seconds(10));
+		g_sendPool.Trim();
+	}
+}
 
 
 int main()
@@ -289,17 +304,20 @@ int main()
 	std::thread db_thread(DBWoker, hdbc);
 	//ai 스레드 생성
 	//std::thread ai_thread(DoAITimer);
+	// 메모리풀 관리 스레드 생성
+	std::thread pool_manager_thread(PoolManagerThread);
 
 	// cpu 코어 개수만큼 woker 스레드 사용
 	for (int i = 0; i < num_threads; i++)
 	{
-		worker_threads.emplace_back(Woker);
+		worker_threads.emplace_back(Worker);
 	}
 	for (auto& th : worker_threads)
 	{
 		th.join();
 	}
 	db_thread.join();
+	pool_manager_thread.join();
 	//ai_thread.join();
 	closesocket(g_server_socket);
 	WSACleanup();

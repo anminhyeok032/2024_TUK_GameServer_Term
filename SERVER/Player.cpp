@@ -50,7 +50,9 @@ void Player::SendLoginFailPacket()
 
 void Player::DoSend(void* packet)
 {
-	OVER* sdata = new OVER{ reinterpret_cast<char*>(packet) };
+	OVER* sdata = g_sendPool.Acquire();
+	*sdata = reinterpret_cast<char*>(packet);
+    
 	WSASend(socket_, &sdata->wsabuf_, 1, 0, 0, &sdata->over_, 0);
 }
 
@@ -404,6 +406,12 @@ void Player::ProcessPacket(char* packet)
 				}
 			}
 
+			break;
+		}
+		case CS_TELEPORT:
+		{
+			x_ = rand() % W_WIDTH;
+			y_ = rand() % W_HEIGHT;
 			break;
 		}
 		// 채팅 패킷 처리
