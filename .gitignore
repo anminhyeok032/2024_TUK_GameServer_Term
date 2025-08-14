@@ -9,7 +9,6 @@
 /CLIENT/Release 
 /CLIENT/packages
 /CLIENT/client_sample/x64
-*.exe 
 *.ilk 
 *.pdb 
 *.obj 

@@ -525,13 +525,13 @@ int main()
 
 	char SERVER_ADDR[BUF_SIZE];
 	char PLAYER_ID[BUF_SIZE];
-	//std::cout << "Enter IP Address : ";
-	//std::cin.getline(SERVER_ADDR, BUF_SIZE);
+	std::cout << "Enter IP Address : ";
+	std::cin.getline(SERVER_ADDR, BUF_SIZE);
 	std::cout << "Enter Player ID : ";
 	std::cin.getline(PLAYER_ID, BUF_SIZE);
-	//sf::Socket::Status status = s_socket.connect(SERVER_ADDR, PORT_NUM);
+	sf::Socket::Status status = s_socket.connect(SERVER_ADDR, PORT_NUM);
 	
-	sf::Socket::Status status = s_socket.connect("127.0.0.1", PORT_NUM);
+	//sf::Socket::Status status = s_socket.connect("127.0.0.1", PORT_NUM);
 	s_socket.setBlocking(false);
 
 	if (status == sf::Socket::Done)
