@@ -125,138 +125,104 @@ void Player::DBLogin(SQLHDBC& hdbc)
 {
 	SQLHSTMT hstmt = AllocateStatement(hdbc);
 	SQLRETURN retcode;
+
+	// Stored Procedure 호출 준비
+	retcode = SQLPrepare(hstmt, (SQLWCHAR*)L"{CALL sp_UserLogin(?)}", SQL_NTS);
+	if (!(retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO))
+	{
+		DisplayDBError(hstmt, SQL_HANDLE_STMT, retcode);
+		SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
+		SendLoginFailPacket();
+		return;
+	}
+
+	// 매개변수 바인딩 (user_id)
 	SQLWCHAR dId[NAME_LEN];
-	SQLSMALLINT  d_x, d_y, d_max_hp, d_level, d_visual;
+	std::wstring wuser_id(name_, name_ + strlen(name_));
+	SQLBindParameter(hstmt, 1, SQL_PARAM_INPUT, SQL_C_WCHAR, SQL_WVARCHAR,
+		NAME_LEN, 0, (SQLPOINTER)wuser_id.c_str(),
+		wuser_id.size() * sizeof(wchar_t), nullptr);
+
+	// 실행
+	retcode = SQLExecute(hstmt);
+	if (retcode != SQL_SUCCESS && retcode != SQL_SUCCESS_WITH_INFO)
+	{
+		DisplayDBError(hstmt, SQL_HANDLE_STMT, retcode);
+		SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
+		SendLoginFailPacket();
+		return;
+	}
+
+	// 결과 바인딩
+	SQLSMALLINT d_x, d_y, d_max_hp, d_level, d_visual;
 	SQLINTEGER d_exp;
 	SQLLEN cbId = 0, cb_x = 0, cb_y = 0, cb_max_hp = 0, cb_exp = 0, cb_level = 0, cb_visual = 0;
 
-	std::string user_id(name_);
+	SQLBindCol(hstmt, 1, SQL_C_WCHAR, dId, NAME_LEN * sizeof(SQLWCHAR), &cbId);
+	SQLBindCol(hstmt, 2, SQL_C_SSHORT, &d_x, 0, &cb_x);
+	SQLBindCol(hstmt, 3, SQL_C_SSHORT, &d_y, 0, &cb_y);
+	SQLBindCol(hstmt, 4, SQL_C_SSHORT, &d_max_hp, 0, &cb_max_hp);
+	SQLBindCol(hstmt, 5, SQL_C_SLONG, &d_exp, 0, &cb_exp);
+	SQLBindCol(hstmt, 6, SQL_C_SSHORT, &d_level, 0, &cb_level);
+	SQLBindCol(hstmt, 7, SQL_C_SSHORT, &d_visual, 0, &cb_visual);
 
-	std::wstring sql_query = L"SELECT * FROM user_term_table WHERE user_id = \'"
-		+ std::wstring(user_id.begin(), user_id.end()) + L"\'";
-
-	retcode = SQLExecDirect(hstmt, (SQLWCHAR*)sql_query.c_str(), SQL_NTS);
-
-	if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO)
+	
+	// 현재 해당 캐릭터가 접속해있는지 확인후, 접속해있을시 중복접속 차단
+	for (auto player : g_player_list)
 	{
-		// Bind columns
-		SQLBindCol(hstmt, 1, SQL_C_WCHAR, dId, NAME_LEN * sizeof(SQLWCHAR), &cbId);
-		SQLBindCol(hstmt, 2, SQL_C_SSHORT, &d_x, 0, &cb_x);
-		SQLBindCol(hstmt, 3, SQL_C_SSHORT, &d_y, 0, &cb_y);
-		SQLBindCol(hstmt, 4, SQL_C_SSHORT, &d_max_hp, 0, &cb_max_hp);
-		SQLBindCol(hstmt, 5, SQL_C_SLONG, &d_exp, 0, &cb_exp);
-		SQLBindCol(hstmt, 6, SQL_C_SSHORT, &d_level, 0, &cb_level);
-		SQLBindCol(hstmt, 7, SQL_C_SSHORT, &d_visual, 0, &cb_visual);
-
-
-		
-		for (auto player : g_player_list)
+		if (player == id_) continue;
+		if (0 == strncmp(name_, objects[player]->name_, sizeof(name_)))
 		{
-			if (player == id_) continue;
-			if (0 == strncmp(name_, objects[player]->name_, sizeof(name_)))
-			{
-				std::wcerr << L"Login Failed: Already logged in." << std::endl;
+			std::wcerr << L"Login Failed: Already logged in." << std::endl;
 				
-				SendLoginFailPacket();
-				SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
-				return;
-			}
-		}
-		retcode = SQLFetch(hstmt);
-		if (retcode == SQL_SUCCESS)
-		{
-			//wprintf(L"Login Success : User ID: %s, Location X: %d, Location Y: %d\n", dId, d_x, d_y);
-			// DB에서 받은 정보 초기화
-			x_ = d_x;
-			y_ = d_y;
-			max_hp_ = d_max_hp;
-			hp_ = max_hp_;
-			exp_ = d_exp;
-			level_ = d_level;
-			visual_ = d_visual;
-
-			//===============
-			// Login 로직 시작
-			//===============
-			SendLoginInfoPacket();
-			// 자신의 위치 섹터에 저장
-			PutInSector();
-			// 해당 객체 INGAME 상태로 변경
-			{
-				std::lock_guard<std::mutex> lock(mut_state_);
-				state_ = OS_INGAME;
-			}
-
-			for (auto& sector : around_sector_)
-			{
-				{
-					// 섹터에 대한 lock
-					std::lock_guard<std::mutex> sec_l(g_ObjectSector[sector].mut_sector_);
-					for (auto& id : g_ObjectSector[sector].sec_id_)
-					{
-						{
-							std::lock_guard<std::mutex> ll(objects[id]->mut_state_);
-							if (OS_INGAME != objects[id]->state_) continue;
-						}
-
-						if (false == CanSee(id_, objects[id]->id_))	continue;
-						if (objects[id]->id_ == id_)	continue;	// 자기자신일때
-						objects[id]->SendAddObjectPacket(id_);
-						SendAddObjectPacket(objects[id]->id_);
-					}
-				}
-			}
-		}
-		else
-		{
-			//std::wcerr << L"Login Failed: No such user ID found." << std::endl;
+			SendLoginFailPacket();
 			SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
+			return;
+		}
+	}
 
-			// 새로운 사용자 정보를 삽입하는 쿼리 작성
-			hstmt = AllocateStatement(hdbc);
-			std::wstring insert_query = L"INSERT INTO user_term_table (user_id, user_x, user_y, user_max_hp, user_exp, user_level, user_visual) VALUES (\'"
-				+ std::wstring(user_id.begin(), user_id.end()) + L"\', 0, 0, 100, 0, 1, 0)";
+	retcode = SQLFetch(hstmt);
+	if (retcode == SQL_SUCCESS)
+	{
+		//wprintf(L"Login Success : User ID: %s, Location X: %d, Location Y: %d\n", dId, d_x, d_y);
+		// DB에서 받은 정보 초기화
+		x_ = d_x;
+		y_ = d_y;
+		max_hp_ = d_max_hp;
+		hp_ = max_hp_;
+		exp_ = d_exp;
+		level_ = d_level;
+		visual_ = d_visual;
 
-			retcode = SQLExecDirect(hstmt, (SQLWCHAR*)insert_query.c_str(), SQL_NTS);
+		//===============
+		// Login 로직 시작
+		//===============
+		SendLoginInfoPacket();
+		// 자신의 위치 섹터에 저장
+		PutInSector();
+		// 해당 객체 INGAME 상태로 변경
+		{
+			std::lock_guard<std::mutex> lock(mut_state_);
+			state_ = OS_INGAME;
+		}
 
-			if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO)
+		for (auto& sector : around_sector_)
+		{
 			{
-				// 새로운 플레이어 정보 초기화
-				x_ = 0;
-				y_ = 0;
-				max_hp_ = 100;
-				hp_ = max_hp_;
-				exp_ = 0;
-				level_ = 1;
-				visual_ = 0;
-
-				// 로그인 로직 시작
-				SendLoginInfoPacket();
-				PutInSector();
+				// 섹터에 대한 lock
+				std::lock_guard<std::mutex> sec_l(g_ObjectSector[sector].mut_sector_);
+				for (auto& id : g_ObjectSector[sector].sec_id_)
 				{
-					std::lock_guard<std::mutex> lock(mut_state_);
-					state_ = OS_INGAME;
-				}
-
-				for (auto& sector : around_sector_)
-				{
-					std::lock_guard<std::mutex> sec_l(g_ObjectSector[sector].mut_sector_);
-					for (auto& id : g_ObjectSector[sector].sec_id_)
 					{
 						std::lock_guard<std::mutex> ll(objects[id]->mut_state_);
 						if (OS_INGAME != objects[id]->state_) continue;
-						if (false == CanSee(id_, objects[id]->id_)) continue;
-						if (objects[id]->id_ == id_) continue; // 자기자신일때
-						objects[id]->SendAddObjectPacket(id_);
-						SendAddObjectPacket(objects[id]->id_);
 					}
+
+					if (false == CanSee(id_, objects[id]->id_))	continue;
+					if (objects[id]->id_ == id_)	continue;	// 자기자신일때
+					objects[id]->SendAddObjectPacket(id_);
+					SendAddObjectPacket(objects[id]->id_);
 				}
-			}
-			else
-			{
-				std::wcerr << L"Failed to insert new user: " << user_id.c_str() << std::endl;
-				name_[0] = { 0, };
-				SendLoginFailPacket();
 			}
 		}
 	}
@@ -278,21 +244,36 @@ void Player::DBLogout(SQLHDBC& hdbc)
 	SQLHSTMT hstmt = AllocateStatement(hdbc);
 	SQLRETURN retcode;
 
-	std::string user_id(name_);
+	std::wstring w_user_id(name_, name_ + strlen(name_));
 
-	std::wstring sql_query = L"UPDATE user_term_table SET user_x = "
-		+ std::to_wstring(x_)
-		+ L", user_y = " + std::to_wstring(y_)
-		+ L", user_max_hp = " + std::to_wstring(max_hp_)
-		+ L", user_exp = " + std::to_wstring(exp_)
-		+ L", user_level = " + std::to_wstring(level_)
-		+ L" WHERE user_id = \'" + std::wstring(user_id.begin(), user_id.end()) + L"\'";
+	// 준비된 문으로 Stored Procedure 호출
+	retcode = SQLPrepare(hstmt, (SQLWCHAR*)L"{CALL sp_UserLogout(?, ?, ?, ?, ?, ?)}", SQL_NTS);
+	if (retcode != SQL_SUCCESS && retcode != SQL_SUCCESS_WITH_INFO) {
+		DisplayDBError(hstmt, SQL_HANDLE_STMT, retcode);
+		SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
+		return;
+	}
 
-	retcode = SQLExecDirect(hstmt, (SQLWCHAR*)sql_query.c_str(), SQL_NTS);
+	// 파라미터 바인딩
+	SQLBindParameter(hstmt, 1, SQL_PARAM_INPUT, SQL_C_WCHAR, SQL_WVARCHAR, w_user_id.size(), 0,
+		(SQLWCHAR*)w_user_id.c_str(), 0, NULL);
+	SQLBindParameter(hstmt, 2, SQL_PARAM_INPUT, SQL_C_SSHORT, SQL_INTEGER, 0, 0,
+		&x_, 0, NULL);
+	SQLBindParameter(hstmt, 3, SQL_PARAM_INPUT, SQL_C_SSHORT, SQL_INTEGER, 0, 0,
+		&y_, 0, NULL);
+	SQLBindParameter(hstmt, 4, SQL_PARAM_INPUT, SQL_C_SSHORT, SQL_INTEGER, 0, 0,
+		&max_hp_, 0, NULL);
+	SQLBindParameter(hstmt, 5, SQL_PARAM_INPUT, SQL_C_SLONG, SQL_INTEGER, 0, 0,
+		&exp_, 0, NULL);
+	SQLBindParameter(hstmt, 6, SQL_PARAM_INPUT, SQL_C_SSHORT, SQL_INTEGER, 0, 0,
+		&level_, 0, NULL);
 
+	// 실행
+	retcode = SQLExecute(hstmt);
 	if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO)
 	{
-		std::wcout << "[" << name_ << "] : " << L"Logout successful, data saved. x = " << x_ << ", y = " << y_ << std::endl;
+		std::wcout << "[" << name_ << L"] : Logout successful, data saved. "
+			<< L"x = " << x_ << L", y = " << y_ << std::endl;
 		name_[0] = 0;
 	}
 	else
@@ -300,10 +281,7 @@ void Player::DBLogout(SQLHDBC& hdbc)
 		DisplayDBError(hstmt, SQL_HANDLE_STMT, retcode);
 	}
 
-	if (hstmt)
-	{
-		SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
-	}
+	SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
 }
 
 void Player::SendAttackPacket(int attacker_id, int damaged_id, int exp)
