@@ -266,6 +266,8 @@ void PoolManagerThread()
 	while (true) 
 	{
 		std::this_thread::sleep_for(std::chrono::seconds(10));
+		size_t newMax = g_player_list.size() * 20; // 플레이어당 20개 할당
+		g_sendPool.SetMaxSize(newMax);
 		g_sendPool.Trim();
 	}
 }

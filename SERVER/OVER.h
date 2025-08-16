@@ -35,42 +35,42 @@ template<typename T>
 class ObjectPool
 {
 private:
-    concurrency::concurrent_queue<T*> pool;
-    const size_t max_size;
-    std::atomic<size_t> current_size;
+    concurrency::concurrent_queue<T*> pool_;
+    std::atomic<size_t> max_size_;
+    std::atomic<size_t> current_size_;
 
 public:
     ObjectPool(size_t maxSize)
-        : max_size(maxSize), current_size(0) { }
+        : max_size_(maxSize), current_size_(0) { }
 
     // 객체 가져오기
     T* Acquire()
     {
         T* obj = nullptr;
-        if (pool.try_pop(obj))
+        if (pool_.try_pop(obj))
         {
             //Log(0); // 재사용된 객체 사용
             return obj;
         }
 
         //Log(1); // 객체가 max_size를 초과하여 새로 생성됨
-        current_size.fetch_add(1, std::memory_order_relaxed);
+        current_size_.fetch_add(1, std::memory_order_relaxed);
         return new T();
     }
 
     // 객체 반환 (max_size 초과 시 바로 삭제)
     void Release(T* obj)
     {
-        if (current_size.load(std::memory_order_relaxed) <= max_size)
+        if (current_size_.load(std::memory_order_relaxed) <= max_size_)
         {
             //Log(2); // 객체 반환
-            pool.push(obj);
+            pool_.push(obj);
         }
         else
         {
             //Log(3); // 객체가 max_size를 초과하여 삭제됨
             delete obj;
-            current_size.fetch_sub(1, std::memory_order_relaxed);
+            current_size_.fetch_sub(1, std::memory_order_relaxed);
         }
     }
 
@@ -79,10 +79,10 @@ public:
     {
         T* obj = nullptr;
         int delete_count = 0;
-        while (current_size.load(std::memory_order_relaxed) > max_size && pool.try_pop(obj))
+        while (current_size_.load(std::memory_order_relaxed) > max_size_ && pool_.try_pop(obj))
         {
             delete obj;
-            current_size.fetch_sub(1, std::memory_order_relaxed);
+            current_size_.fetch_sub(1, std::memory_order_relaxed);
             delete_count++;
         }
         if (delete_count > 0)
@@ -92,9 +92,15 @@ public:
         }
     }
 
+    // max_size를 플레이어 수에 맞춰 변경하여 메모리 낭비를 줄이기
+    void SetMaxSize(size_t newMax)
+    {
+        max_size_.store(newMax, std::memory_order_relaxed);
+    }
+
     size_t Size() const
     {
-        return current_size.load(std::memory_order_relaxed);
+        return current_size_.load(std::memory_order_relaxed);
     }
 
     void Log(int type) const
