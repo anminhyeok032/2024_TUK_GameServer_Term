@@ -127,4 +127,5 @@ extern concurrency::concurrent_priority_queue<EVENT> g_event_queue;
 void AddTimer(int id, EVENT_TYPE type, int ms, int target_id);
 void DoAITimer();
 int API_get_xy(lua_State* L);
+int API_Move(lua_State* L);
 int API_Attack(lua_State* L);

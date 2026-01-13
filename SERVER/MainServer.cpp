@@ -225,6 +225,17 @@ void disconnect(int c_id)
 	}
 }
 
+// 서버 초기화 시 반드시 호출
+void InitializeSectors() 
+{
+	for (int y = 0; y <= W_HEIGHT / SEC_COL; ++y) {
+		for (int x = 0; x <= W_WIDTH / SEC_ROW; ++x) {
+			// 미리 생성하여 락 경합 및 맵 구조 변경 방지
+			g_ObjectSector[{x, y}];
+		}
+	}
+}
+
 void InitializeObjects()
 {
 	std::cout << "===== Initialize NPC Begin =====" << std::endl;
@@ -298,14 +309,14 @@ int main()
 
 	std::vector <std::thread> worker_threads;
 	int num_threads = std::thread::hardware_concurrency();
-
+	InitializeSectors();
 	InitializeObjects();
 
 	// DB 스레드 생성
 	SQLHDBC hdbc = ConnectWithDataBase();
 	std::thread db_thread(DBWoker, hdbc);
 	//ai 스레드 생성
-	//std::thread ai_thread(DoAITimer);
+	std::thread ai_thread(DoAITimer);
 	// 메모리풀 관리 스레드 생성
 	std::thread pool_manager_thread(PoolManagerThread);
 
@@ -320,7 +331,7 @@ int main()
 	}
 	db_thread.join();
 	pool_manager_thread.join();
-	//ai_thread.join();
+	ai_thread.join();
 	closesocket(g_server_socket);
 	WSACleanup();
 }

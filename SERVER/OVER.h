@@ -31,53 +31,45 @@ public:
 };
 
 
-template<typename T>
+template<typename MemoryPool>
 class ObjectPool
 {
 private:
-    concurrency::concurrent_queue<T*> pool_;
-    std::atomic<size_t> max_size_;
-    std::atomic<size_t> current_size_;
-
+    concurrency::concurrent_queue<MemoryPool*> pool_;   // 객체 풀
+    std::atomic<size_t> max_size_;                      // 최대 객체 크기
+    std::atomic<size_t> current_size_;                  // 현재 객체 크기
 public:
     ObjectPool(size_t maxSize)
         : max_size_(maxSize), current_size_(0) { }
 
     // 객체 가져오기
-    T* Acquire()
+    MemoryPool* Acquire()
     {
-        T* obj = nullptr;
+        MemoryPool* obj = nullptr;
+        // 재사용 가능한 객체가 있으면 반환
         if (pool_.try_pop(obj))
-        {
-            //Log(0); // 재사용된 객체 사용
             return obj;
-        }
-
-        //Log(1); // 객체가 max_size를 초과하여 새로 생성됨
+        // 없으면 새로 생성
         current_size_.fetch_add(1, std::memory_order_relaxed);
-        return new T();
+        return new MemoryPool();
     }
 
     // 객체 반환 (max_size 초과 시 바로 삭제)
-    void Release(T* obj)
+    void Release(MemoryPool* obj)
     {
+        // 객체가 max_size 이하일 때만 풀에 반환
         if (current_size_.load(std::memory_order_relaxed) <= max_size_)
-        {
-            //Log(2); // 객체 반환
             pool_.push(obj);
-        }
+        // 객체 반환
         else
-        {
-            //Log(3); // 객체가 max_size를 초과하여 삭제됨
             delete obj;
             current_size_.fetch_sub(1, std::memory_order_relaxed);
-        }
     }
 
     // 주기적 Trim - max_size보다 많이 쌓인 경우 정리
     void Trim() 
     {
-        T* obj = nullptr;
+        MemoryPool* obj = nullptr;
         int delete_count = 0;
         while (current_size_.load(std::memory_order_relaxed) > max_size_ && pool_.try_pop(obj))
         {

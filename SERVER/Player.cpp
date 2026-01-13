@@ -1,5 +1,5 @@
 #include "Player.h"
-
+#include "Npc.h"
 void print_error(const char* msg, int err_no)
 {
 	WCHAR* msg_buf;
@@ -355,6 +355,15 @@ void Player::ProcessPacket(char* packet)
 
 						if (false == CanSee(id_, objects[id]->id_))	continue;
 						if (objects[id]->id_ == id_)	continue;	// 자기자신일때
+						// NPC일 경우 WakeUp 호출 로직
+						if (IsNpc(objects[id]->id_))
+						{
+							// objects 배열이 부모 클래스(Session 등) 포인터라면 캐스팅 필요
+							Npc* npc = dynamic_cast<Npc*>(objects[id].get());
+							if (npc) {
+								npc->WakeUpNpc(id_);
+							}
+						}
 						curr_viewlist.insert(objects[id]->id_);
 
 					}

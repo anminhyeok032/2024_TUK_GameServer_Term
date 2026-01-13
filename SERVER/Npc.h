@@ -25,8 +25,11 @@ public:
 	// npc 주변에 플레이어가 있는지 검사하는 함수
 	bool IsPlayerExist();
 	void WakeUpNpc(int p_id);
+	int GetNearestPlayerId();
+	bool IsValidTarget(int target_id);
 	void SetAiLua();
 	void DoRandomMove(int target_id);
+	void Move(int dir);
 
 	// 원래 위치 지정
 	void SetStartPos(int x, int y) { start_x_ = x; start_y_ = y; }
