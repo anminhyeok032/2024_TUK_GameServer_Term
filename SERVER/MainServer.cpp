@@ -168,9 +168,10 @@ void Worker()
 		//=======================================================
 		// AI Ã³¸®
 		//=======================================================
+		case KEY_NPC_MOVE_TO_PLAYER:
 		case KEY_NPC_RANDOM_MOVE:
 		{
-			objects[key]->DoRandomMove(ex_over->ai_target_c_id_);
+			objects[key]->DoMove(ex_over->ai_target_c_id_);
 			// delete ex_over;
 			g_sendPool.Release(ex_over);
 			break;

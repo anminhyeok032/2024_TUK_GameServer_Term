@@ -1,39 +1,67 @@
 #include "Npc.h"
 
-void Npc::DoRandomMove(int target_id)
+void Npc::DoMove(int target_id)
 {
-	int final_target = target_id;
-
-	// 현재 타겟이 유효한지 검증
-	if (false == IsValidTarget(final_target))
+	// 타입에 따라 다른 AI 로직 수행
+	switch (visual_)
 	{
-		// 타겟이 없거나 사라졌다면, 주변에서 새로운 타겟을 찾음 (어그로 변경)
-		final_target = GetNearestPlayerId();
-	}
-	// 그래도 타겟이 없으면 다시 잠듦 (Sleep)
-	if (final_target == -1)
+	case 1: // [Agro] 추적형 NPC
 	{
-		active_ = false;
-		return;
-	}
+		int final_target = target_id;
 
-	// Lua 스크립트 실행 (이동 방향 결정 등)
-	{
-		std::lock_guard<std::mutex> ml{ mut_lua_ };
-		if (L_ == nullptr) SetAiLua();
-
-		lua_getglobal(L_, "event_player_search");
-		lua_pushnumber(L_, final_target); // 검증된 타겟 ID 전달
-
-		if (lua_pcall(L_, 1, 0, 0) != LUA_OK) {
-			std::cout << "Lua Error: " << lua_tostring(L_, -1) << std::endl;
-			lua_pop(L_, 1);
+		// 현재 타겟이 유효한지 검증
+		if (false == IsValidTarget(final_target))
+		{
+			// 타겟이 없거나 사라졌다면, 주변에서 새로운 타겟을 찾음 (어그로 변경)
+			final_target = GetNearestPlayerId();
 		}
-	}
+		// 그래도 타겟이 없으면 다시 잠듦 (Sleep)
+		if (final_target == -1)
+		{
+			active_ = false;
+			return;
+		}
 
-	// 다음 행동 예약
-	AddTimer(id_, EV_NPC_RANDOM_MOVE, 1000, final_target);
+		// Lua 스크립트 실행 (이동 방향 결정 등)
+		{
+			std::lock_guard<std::mutex> ml{ mut_lua_ };
+			if (L_ == nullptr) SetAiLua();
+
+			lua_getglobal(L_, "event_player_search");
+			lua_pushnumber(L_, final_target); // 검증된 타겟 ID 전달
+
+			if (lua_pcall(L_, 1, 0, 0) != LUA_OK) {
+				std::cout << "Lua Error: " << lua_tostring(L_, -1) << std::endl;
+				lua_pop(L_, 1);
+			}
+		}
+
+		// 다음 행동 예약
+		AddTimer(id_, EV_MOVE_TO_PLAYER, 1000, final_target);
+		break;
+	}
+	case 2: // [Peace] 배회형 NPC
+	{
+		// 0~3 난수 생성 (상하좌우)
+		int dir = rand() % 4;
+
+		// 이동 함수 직접 호출
+		Move(dir);
+
+		// 주변에 플레이어가 있는지 확인 후 계속 움직일지 결정 (Sleep 로직)
+		if (true == IsPlayerExist()) // 주변에 누군가 있어야 움직임
+		{
+			AddTimer(id_, EV_NPC_RANDOM_MOVE, 1000, 0);
+		}
+		else
+		{
+			active_ = false; // 주변에 아무도 없으면 Sleep
+		}
+		break;
+	}
+	}
 }
+
 
 void Npc::Move(int dir)
 {
@@ -144,19 +172,20 @@ void Npc::WakeUpNpc(int p_id)
 	OVER* over = g_sendPool.Acquire();
 	switch (visual_)
 	{
-	case 1:	// Agro
-	{
-		over->comp_key_ = KEY_NPC_RANDOM_MOVE;
-		over->ai_target_c_id_ = p_id;
-
-		PostQueuedCompletionStatus(g_h_iocp, 1, id_, &over->over_);
-		break;
+		case 1:	// Agro
+		{
+			over->comp_key_ = KEY_NPC_MOVE_TO_PLAYER;
+			over->ai_target_c_id_ = p_id;
+			break;
+		}
+		case 2: // peace
+		{
+			over->comp_key_ = KEY_NPC_RANDOM_MOVE;
+			over->ai_target_c_id_ = 0;
+			break;
+		}
 	}
-	case 2: // peace
-	{
-		break;
-	}
-	}
+	PostQueuedCompletionStatus(g_h_iocp, 1, id_, &over->over_);
 }
 
 // 가장 가까운 플레이어 ID를 찾는 헬퍼 함수

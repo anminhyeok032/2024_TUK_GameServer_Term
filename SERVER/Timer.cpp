@@ -35,6 +35,16 @@ void DoAITimer() {
 			//OVER* ov = new OVER;
 			break;
 		}
+		case EV_MOVE_TO_PLAYER:
+		{
+			//OVER* ov = new OVER;
+			OVER* ov = g_sendPool.Acquire();
+			ov->comp_key_ = KEY_NPC_MOVE_TO_PLAYER;
+			ov->ai_target_c_id_ = ev.target_id_;
+			PostQueuedCompletionStatus(g_h_iocp, 1, ev.id_, &ov->over_);
+			break;
+		}
+
 		case EV_NPC_RANDOM_MOVE:
 		{
 			//OVER* ov = new OVER;

@@ -28,7 +28,7 @@ public:
 	int GetNearestPlayerId();
 	bool IsValidTarget(int target_id);
 	void SetAiLua();
-	void DoRandomMove(int target_id);
+	void DoMove(int target_id);
 	void Move(int dir);
 
 	// 원래 위치 지정
