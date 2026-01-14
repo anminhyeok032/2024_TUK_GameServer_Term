@@ -193,6 +193,35 @@ void Player::DBLogin(SQLHDBC& hdbc)
 		exp_ = d_exp;
 		level_ = d_level;
 		visual_ = d_visual;
+		
+		// 서버 크래시시, redis의 정보가 더 최신이면 덮어써서 살려주기
+		if (g_redis_client->is_connected())
+		{
+			std::string key(name_);
+			key = "User:" + key;
+
+			auto future_reply = g_redis_client->hgetall(key);
+			g_redis_client->sync_commit();
+
+			auto reply = future_reply.get();
+			if (reply.is_array() && reply.as_array().size() > 0)
+			{
+				std::cout << "[Recovery] Redis에서 최신 데이터를 복구 : " << name_ << std::endl;
+
+				auto arr = reply.as_array();
+				for (size_t i = 0; i < arr.size(); i += 2) {
+					std::string field = arr[i].as_string();
+					std::string value = arr[i + 1].as_string();
+
+					// SQL 데이터보다 Redis 데이터가 최신이므로 덮어씀
+					if (field == "x") x_ = (short)std::stoi(value);
+					else if (field == "y") y_ = (short)std::stoi(value);
+					else if (field == "hp") hp_ = std::stoi(value);
+					else if (field == "exp") exp_ = std::stoi(value);
+					else if (field == "level") level_ = std::stoi(value);
+				}
+			}
+		}
 
 		// 로그인 성공 정보를 Redis에도 백업
 		SaveToRedis();
