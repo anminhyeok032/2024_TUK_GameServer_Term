@@ -32,6 +32,9 @@ public:
 
 	void DBLogin(SQLHDBC& hdbc) override;
 	void DBLogout(SQLHDBC& hdbc) override;
+	void SaveToRedis() override;
 
 	void ProcessPacket(char* packet) override;
+
+	void DeleteFromRedis();
 };

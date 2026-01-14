@@ -61,6 +61,7 @@ public:
 
 	virtual void DBLogin(SQLHDBC& hdbc) {};
 	virtual void DBLogout(SQLHDBC& hdbc) {};
+	virtual void SaveToRedis() {};
 
 
 	virtual SOCKET GetSocket() { return INVALID_SOCKET; }

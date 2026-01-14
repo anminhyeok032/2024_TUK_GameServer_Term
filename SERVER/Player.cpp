@@ -194,6 +194,9 @@ void Player::DBLogin(SQLHDBC& hdbc)
 		level_ = d_level;
 		visual_ = d_visual;
 
+		// 로그인 성공 정보를 Redis에도 백업
+		SaveToRedis();
+
 		//===============
 		// Login 로직 시작
 		//===============
@@ -274,6 +277,10 @@ void Player::DBLogout(SQLHDBC& hdbc)
 	{
 		std::wcout << "[" << name_ << L"] : Logout successful, data saved. "
 			<< L"x = " << x_ << L", y = " << y_ << std::endl;
+
+		// SQL 저장이 안전하게 끝났으므로 Redis 캐시 삭제
+		DeleteFromRedis();
+
 		name_[0] = 0;
 	}
 	else
@@ -523,6 +530,7 @@ void Player::ProcessPacket(char* packet)
 								level_++;
 								exp_ -= required_exp;
 								std::cout << "Level up - " << level_ << "!" << std::endl;
+								g_db_request_queue.push({ DBRequest::SAVE_REDIS, id_ });
 							}
 							SendStatChangePacket();
 							for (auto& view_list : objects[id]->view_list_)
@@ -546,3 +554,39 @@ void Player::ProcessPacket(char* packet)
 	}
 }
 
+// 플레이어 정보를 Redis에 저장 (실시간 백업용)
+void Player::SaveToRedis()
+{
+	if (!g_redis_client->is_connected()) return;
+
+	// Redis Key 설정
+	std::string key(name_);
+	key = "User:" + key;
+
+	// vector of pair로 필드와 값 지정
+	std::vector<std::pair<std::string, std::string>> field_val = {
+		{"x", std::to_string(x_)},
+		{"y", std::to_string(y_)},
+		{"hp", std::to_string(hp_)},
+		{"level", std::to_string(level_)},
+		{"exp", std::to_string(exp_)}
+	};
+
+	// HSET 명령어로 저장 (비동기)
+	g_redis_client->hmset(key, field_val, [](cpp_redis::reply& reply) {
+		// if (reply.is_error()) std::cout << "Redis Set Error\n";
+		});
+
+	// 변경사항 커밋
+	g_redis_client->commit();
+}
+
+// Redis에서 데이터 삭제 (로그아웃 후 SQL 저장 완료 시)
+void Player::DeleteFromRedis()
+{
+	if (!g_redis_client->is_connected()) return;
+	std::string key(name_);
+	key = "User:" + key;
+	g_redis_client->del({ key });
+	g_redis_client->commit();
+}

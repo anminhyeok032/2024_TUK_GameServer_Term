@@ -29,6 +29,9 @@
 #define NAME_LEN 50  
 #define PHONE_LEN 60
 
+// redis 라이브러리
+#include <cpp_redis/cpp_redis>
+
 //// global 변수
 constexpr int BUF_SIZE = 200;
 
@@ -56,12 +59,17 @@ bool IsPlayer(int a);
 void disconnect(int c_id);
 
 
+extern std::unique_ptr<cpp_redis::client> g_redis_client;
 
+// 문자열 변환 유틸 (SQL WCHAR <-> Redis string)
+std::string WStringToString(const std::wstring& wstr);
+bool ConnectWithRedis();
 
 // DB 수행하기 위한 struct와 queue
 struct DBRequest
 {
-	enum DB_Type { LOGIN, LOGOUT } db_type;
+	enum DBType { LOGIN, LOGOUT, SAVE_REDIS };
+	DBType db_type;
 	int id;
 };
 extern concurrency::concurrent_queue<DBRequest> g_db_request_queue;

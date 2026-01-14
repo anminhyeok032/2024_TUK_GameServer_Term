@@ -108,5 +108,11 @@ void ProcessDBRequest(const DBRequest& request, SQLHDBC& hdbc)
 		// 로그아웃 처리 로직
 		objects[request.id]->DBLogout(hdbc);
 		break;
+	
+	case DBRequest::SAVE_REDIS: // Redis 저장 처리
+		// dynamic_cast 체크나 유효성 검사 필요
+		if (objects[request.id]->state_ == OS_INGAME)
+			objects[request.id]->SaveToRedis();
+		break;
 	}
 }

@@ -313,6 +313,14 @@ int main()
 	InitializeSectors();
 	InitializeObjects();
 
+	// redis 초기화
+	g_redis_client = std::make_unique<cpp_redis::client>();
+	if (ConnectWithRedis() == false)
+	{
+		std::cout << "Redis Server is NOT running.\n";
+		return 0; 
+	}
+
 	// DB 스레드 생성
 	SQLHDBC hdbc = ConnectWithDataBase();
 	std::thread db_thread(DBWoker, hdbc);
