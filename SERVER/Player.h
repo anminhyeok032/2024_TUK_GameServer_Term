@@ -1,7 +1,7 @@
 #pragma once
 #include "Session.h"
 
-
+class RankingManager;
 
 class Player : public SESSION
 {
@@ -10,6 +10,7 @@ public:
 
 	int		exp_;
 	std::chrono::system_clock::time_point  last_action_time_;
+	std::chrono::system_clock::time_point last_rank_req_time_;
 
 public:
 	Player() : socket_(INVALID_SOCKET), exp_(0) {}

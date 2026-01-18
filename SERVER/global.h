@@ -8,6 +8,7 @@
 #include <map>
 #include <set>
 #include <vector>
+#include <algorithm>
 #include <string>
 #include <cstring>
 #include <concurrent_priority_queue.h>
@@ -31,9 +32,10 @@
 
 // redis 라이브러리
 #include <cpp_redis/cpp_redis>
+#include <future>
 
 //// global 변수
-constexpr int BUF_SIZE = 200;
+constexpr int BUF_SIZE = 4096;
 
 extern SOCKET g_server_socket, g_client_socket;
 extern HANDLE g_h_iocp;
@@ -63,6 +65,7 @@ extern std::unique_ptr<cpp_redis::client> g_redis_client;
 
 // 문자열 변환 유틸 (SQL WCHAR <-> Redis string)
 std::string WStringToString(const std::wstring& wstr);
+std::string WStringToString(const SQLWCHAR* wstr);
 bool ConnectWithRedis();
 
 // DB 수행하기 위한 struct와 queue

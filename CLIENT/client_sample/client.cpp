@@ -16,7 +16,7 @@ using namespace std;
 
 sf::TcpSocket s_socket;
 
-constexpr int BUF_SIZE = 200;
+constexpr int BUF_SIZE = 8192;
 
 constexpr auto SCREEN_WIDTH = 20;
 constexpr auto SCREEN_HEIGHT = 20;
@@ -39,6 +39,64 @@ sf::Font g_font;
 bool isChatActive = false;
 std::string chatInput;
 std::vector<std::string> chatHistory;
+
+// 랭킹 UI 관련 변수
+bool isRankingActive = false;
+int rankingScrollIndex = 0;
+const int MAX_VISIBLE_RANKINGS = 10; // 한 화면에 보여줄 랭킹 개수
+
+struct ClientRankInfo {
+	std::string name;
+	int rank;
+	int level;
+};
+std::vector<ClientRankInfo> g_rankingData;
+
+void DrawRanking()
+{
+	if (!isRankingActive) return;
+
+	// 반투명 검정 배경
+	sf::RectangleShape bg(sf::Vector2f(400, 400));
+	bg.setFillColor(sf::Color(0, 0, 0, 200));
+	bg.setPosition(WINDOW_WIDTH / 2 - 200, WINDOW_HEIGHT / 2 - 200);
+	g_window->draw(bg);
+
+	// 제목 (RANKING)
+	sf::Text title("== RANKING ==", g_font, 30);
+	title.setFillColor(sf::Color::Yellow);
+	title.setPosition(WINDOW_WIDTH / 2 - 100, WINDOW_HEIGHT / 2 - 190);
+	g_window->draw(title);
+
+	// 랭킹 리스트 출력 (스크롤 적용)
+	int yOffset = WINDOW_HEIGHT / 2 - 140;
+	int count = 0;
+
+	// vector 범위 내에서, scrollIndex부터 최대 개수만큼 반복
+	for (size_t i = rankingScrollIndex; i < g_rankingData.size(); ++i)
+	{
+		if (count >= MAX_VISIBLE_RANKINGS) break;
+
+		const auto& item = g_rankingData[i];
+		std::string line = std::to_string(item.rank) + ". " + item.name + " (Lv." + std::to_string(item.level) + ")";
+
+		sf::Text text(line, g_font, 20);
+		text.setFillColor(sf::Color::White);
+		text.setPosition(WINDOW_WIDTH / 2 - 180, yOffset);
+		g_window->draw(text);
+
+		yOffset += 30;
+		count++;
+	}
+
+	// 데이터가 없을 경우
+	if (g_rankingData.empty()) 
+	{
+		sf::Text text("Loading...", g_font, 20);
+		text.setPosition(WINDOW_WIDTH / 2 - 50, WINDOW_HEIGHT / 2);
+		g_window->draw(text);
+	}
+}
 
 class OBJECT {
 private:
@@ -402,6 +460,21 @@ void ProcessPacket(char* ptr)
 		}
 		break;
 	}
+	case SC_RANKING:
+	{
+		SC_RANKING_PACKET* packet = reinterpret_cast<SC_RANKING_PACKET*>(ptr);
+		g_rankingData.clear(); // 기존 데이터 초기화
+
+		for (int i = 0; i < packet->count; ++i)
+		{
+			ClientRankInfo info;
+			info.name = packet->ranks[i].name; // char배열 -> string 자동 변환
+			info.rank = packet->ranks[i].rank;
+			info.level = packet->ranks[i].level;
+			g_rankingData.push_back(info);
+		}
+		break;
+	}
 	case SC_LOGIN_FAIL:
 		std::cout << "ID 접속중\n";
 		std::cout << "프로그램을 종료합니다.\n";
@@ -420,7 +493,19 @@ void process_data(char* net_buf, size_t io_byte)
 	static char packet_buffer[BUF_SIZE];
 
 	while (0 != io_byte) {
-		if (0 == in_packet_size) in_packet_size = ptr[0];
+		if (0 == in_packet_size) {
+			if (io_byte + saved_packet_size < 2) {
+				// 헤더조차 다 안 왔으므로 버퍼에 보관하고 대기
+				memcpy(packet_buffer + saved_packet_size, ptr, io_byte);
+				saved_packet_size += io_byte;
+				io_byte = 0;
+				break;
+			}
+
+			// ptr[0] (char) -> reinterpret_cast<unsigned short*>(ptr)[0]
+			in_packet_size = reinterpret_cast<unsigned short*>(ptr)[0];
+		}
+
 		if (io_byte + saved_packet_size >= in_packet_size) {
 			memcpy(packet_buffer + saved_packet_size, ptr, in_packet_size - saved_packet_size);
 			ProcessPacket(packet_buffer);
@@ -514,9 +599,9 @@ void client_main()
 
 void send_packet(void *packet)
 {
-	unsigned char *p = reinterpret_cast<unsigned char *>(packet);
+	unsigned short packet_size = reinterpret_cast<unsigned short*>(packet)[0];
 	size_t sent = 0;
-	s_socket.send(packet, p[0], sent);
+	s_socket.send(packet, packet_size, sent);
 }
 
 int main()
@@ -570,6 +655,27 @@ int main()
 		{
 			if (event.type == sf::Event::Closed)
 				window.close();
+			// [추가] 마우스 휠 스크롤 (랭킹창 켜져있을 때)
+			if (isRankingActive && event.type == sf::Event::MouseWheelScrolled)
+			{
+				if (event.mouseWheelScroll.wheel == sf::Mouse::VerticalWheel)
+				{
+					// 위로 굴리면(-), 아래로 굴리면(+) -> SFML 버전에 따라 델타값 부호 확인 필요
+					// 보통 위로 굴리면 delta > 0 (인덱스 감소, 위로 이동)
+					// 아래로 굴리면 delta < 0 (인덱스 증가, 아래로 이동)
+					if (event.mouseWheelScroll.delta > 0)
+						rankingScrollIndex--;
+					else
+						rankingScrollIndex++;
+
+					// 범위 제한
+					int maxIndex = (int)g_rankingData.size() - MAX_VISIBLE_RANKINGS;
+					if (maxIndex < 0) maxIndex = 0;
+
+					if (rankingScrollIndex < 0) rankingScrollIndex = 0;
+					if (rankingScrollIndex > maxIndex) rankingScrollIndex = maxIndex;
+				}
+			}
 			if (event.type == sf::Event::KeyPressed) {
 				int direction = -1;
 				int attack_range = -1;
@@ -593,6 +699,18 @@ int main()
 					break;
 				case sf::Keyboard::S:
 					is_direction_attack = true;
+					break;
+				case sf::Keyboard::P:
+					isRankingActive = !isRankingActive;
+					if (true == isRankingActive) 
+					{
+						// 창을 열 때 서버에 데이터 요청
+						CS_RANKING_REQ_PACKET p;
+						p.size = sizeof(p);
+						p.type = CS_RANKING_REQ;
+						send_packet(&p);
+						rankingScrollIndex = 0; // 스크롤 초기화
+					}
 					break;
 				case sf::Keyboard::Escape:
 					window.close();
@@ -670,6 +788,7 @@ int main()
 
 		window.clear();
 		client_main();
+		DrawRanking();
 		window.display();
 	}
 	client_finish();

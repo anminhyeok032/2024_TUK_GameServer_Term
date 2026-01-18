@@ -4,6 +4,7 @@
 #include "Session.h"
 #include "Player.h"
 #include "Npc.h"
+#include "RankingManager.h"
 
 
 SOCKET g_server_socket, g_client_socket;
@@ -284,6 +285,17 @@ void PoolManagerThread()
 	}
 }
 
+// 랭킹 업데이트를 담당할 관리 스레드 함수
+void RankingManagerThread()
+{
+	while (true)
+	{
+		// 10초마다 랭킹 캐시 갱신
+		RankingManager::GetInstance()->UpdateRankingCache();
+		std::this_thread::sleep_for(std::chrono::seconds(10));
+	}
+}
+
 
 int main()
 {
@@ -323,11 +335,15 @@ int main()
 
 	// DB 스레드 생성
 	SQLHDBC hdbc = ConnectWithDataBase();
+	RankingManager::GetInstance()->LoadAllRankingsFromSQL(hdbc);
+	
 	std::thread db_thread(DBWoker, hdbc);
 	//ai 스레드 생성
 	std::thread ai_thread(DoAITimer);
 	// 메모리풀 관리 스레드 생성
 	std::thread pool_manager_thread(PoolManagerThread);
+	// 랭킹 갱신 스레드 생성
+	std::thread ranking_manager_thread(RankingManagerThread);
 
 	// cpu 코어 개수만큼 woker 스레드 사용
 	for (int i = 0; i < num_threads; i++)
@@ -341,6 +357,7 @@ int main()
 	db_thread.join();
 	pool_manager_thread.join();
 	ai_thread.join();
+	ranking_manager_thread.join();
 	closesocket(g_server_socket);
 	WSACleanup();
 }

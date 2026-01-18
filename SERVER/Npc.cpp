@@ -49,9 +49,10 @@ void Npc::DoMove(int target_id)
 		Move(dir);
 
 		// 주변에 플레이어가 있는지 확인 후 계속 움직일지 결정 (Sleep 로직)
+		// peace는 2초에 한번 움직이게 설정
 		if (true == IsPlayerExist()) // 주변에 누군가 있어야 움직임
 		{
-			AddTimer(id_, EV_NPC_RANDOM_MOVE, 1000, 0);
+			AddTimer(id_, EV_NPC_RANDOM_MOVE, 2000, 0);
 		}
 		else
 		{

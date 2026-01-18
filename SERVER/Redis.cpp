@@ -13,6 +13,25 @@ std::string WStringToString(const std::wstring& wstr)
 	WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(), &strTo[0], size_needed, NULL, NULL);
 	return strTo;
 }
+std::string WStringToString(const SQLWCHAR* wstr)
+{
+	if (!wstr) return "";
+
+	// 1. 필요한 버퍼 크기 계산 (널 문자 제외)
+	int size_needed = WideCharToMultiByte(CP_UTF8, 0, (LPCWSTR)wstr, -1, NULL, 0, NULL, NULL);
+
+	// 2. 변환 (size_needed에는 널 문자가 포함되어 있음)
+	std::string strTo(size_needed, 0);
+	WideCharToMultiByte(CP_UTF8, 0, (LPCWSTR)wstr, -1, &strTo[0], size_needed, NULL, NULL);
+
+	// ★ [핵심] C++ string은 널 문자를 실제 데이터로 가질 수 있으므로, 
+	// 변환 후 맨 뒤에 \0이 들어갔다면 제거해야 함.
+	if (!strTo.empty() && strTo.back() == '\0') {
+		strTo.pop_back();
+	}
+
+	return strTo;
+}
 
 bool ConnectWithRedis()
 {

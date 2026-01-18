@@ -15,6 +15,7 @@ constexpr char CS_CHAT = 2;
 constexpr char CS_ATTACK = 3;			// 4 방향 공격
 constexpr char CS_TELEPORT = 4;			// RANDOM한 위치로 Teleport, Stress Test할 때 Hot Spot현상을 피하기 위해 구현
 constexpr char CS_LOGOUT = 5;			// 클라이언트에서 정상적으로 접속을 종료하는 패킷
+constexpr char CS_RANKING_REQ = 6;
 
 constexpr char SC_LOGIN_INFO = 2;
 constexpr char SC_LOGIN_FAIL = 3;
@@ -24,8 +25,17 @@ constexpr char SC_MOVE_OBJECT = 6;
 constexpr char SC_CHAT = 7;
 constexpr char SC_STAT_CHANGE = 8;
 constexpr char SC_ATTACK = 9;			// 공격 표현위해 추가
+constexpr char SC_RANKING = 10;
 
 #pragma pack (push, 1)
+
+// 랭킹 한 줄 정보 (~28 바이트)
+struct RankInfo {
+	char name[NAME_SIZE]; // 이름
+	int rank;             // 등수
+	int level;            // 레벨
+};
+
 struct CS_LOGIN_PACKET {
 	unsigned short size;
 	char	type;
@@ -60,6 +70,12 @@ struct CS_ATTACK_PACKET {
 	unsigned short size;
 	char	type;
 	char	attack_direction;  // 0 : UP, 1 : DOWN, 2 : LEFT, 3 : RIGHT, 4 : 4방향 공격
+};
+
+// [Client -> Server] 랭킹 요청 패킷
+struct CS_RANKING_REQ_PACKET {
+	unsigned short size;
+	char type;
 };
 
 struct SC_LOGIN_INFO_PACKET {
@@ -127,5 +143,13 @@ struct SC_ATTACK_PACKET {
 	int		max_hp;
 	int		hp;
 	int     exp;
+};
+
+// 랭킹 목록 패킷 
+struct SC_RANKING_PACKET {
+	unsigned short size;
+	char type; // SC_RANKING
+	int count; // 현재 담긴 랭커 수
+	RankInfo ranks[100]; // 최대 100명까지
 };
 #pragma pack (pop)

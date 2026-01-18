@@ -1,5 +1,7 @@
 #include "Player.h"
 #include "Npc.h"
+#include "RankingManager.h"
+
 void print_error(const char* msg, int err_no)
 {
 	WCHAR* msg_buf;
@@ -50,10 +52,33 @@ void Player::SendLoginFailPacket()
 
 void Player::DoSend(void* packet)
 {
+	unsigned short pkt_size = reinterpret_cast<unsigned short*>(packet)[0];
+
+	// [안전장치] 버퍼 크기보다 패킷이 크면 서버 터지는 것을 방지
+	if (pkt_size > BUF_SIZE)
+	{
+		std::cout << "[CRITICAL] Packet Size(" << pkt_size
+			<< ") is larger than BUF_SIZE(" << BUF_SIZE << ")!" << std::endl;
+		return;
+	}
+
 	OVER* sdata = g_sendPool.Acquire();
-	*sdata = reinterpret_cast<char*>(packet);
-    
-	WSASend(socket_, &sdata->wsabuf_, 1, 0, 0, &sdata->over_, 0);
+	memcpy(sdata->send_buf_, packet, pkt_size);
+
+	sdata->wsabuf_.buf = sdata->send_buf_;
+	sdata->wsabuf_.len = pkt_size;
+	sdata->comp_key_ = KEY_SEND;
+	ZeroMemory(&sdata->over_, sizeof(sdata->over_));
+
+	// WSASend 에러 체크 추가
+	if (WSASend(socket_, &sdata->wsabuf_, 1, 0, 0, &sdata->over_, 0) == SOCKET_ERROR)
+	{
+		int err = WSAGetLastError();
+		if (err != WSA_IO_PENDING)
+		{
+			std::cout << "[Error] WSASend Failed: " << err << std::endl;
+		}
+	}
 }
 
 void Player::SendMovePacket(int c_id)
@@ -307,8 +332,13 @@ void Player::DBLogout(SQLHDBC& hdbc)
 		std::wcout << "[" << name_ << L"] : Logout successful, data saved. "
 			<< L"x = " << x_ << L", y = " << y_ << std::endl;
 
+
+		// Redis에서 데이터를 삭제하지 않음 - 랭킹 정보 및 조회를 위해
+		// 마지막 상태를 저장하고 TTL만 7일로 유지시킴 -> 7일 초과시 삭제
+		SaveToRedis();
+
 		// SQL 저장이 안전하게 끝났으므로 Redis 캐시 삭제
-		DeleteFromRedis();
+		//DeleteFromRedis();
 
 		name_[0] = 0;
 	}
@@ -580,6 +610,17 @@ void Player::ProcessPacket(char* packet)
 			}
 			break;
 		}
+		case CS_RANKING_REQ:
+		{
+			// 쿨타임 체크 (3초) - 디도스 방지
+			auto now = std::chrono::system_clock::now();
+			if (now - last_rank_req_time_ < std::chrono::seconds(3)) return;
+			last_rank_req_time_ = now;
+
+			// 매니저에게 전송 위임 (DB/Redis 조회 안함, 메모리에서 바로 줌)
+			RankingManager::GetInstance()->SendRankingToPlayer(id_);
+			break;
+		}
 	}
 }
 
@@ -598,13 +639,17 @@ void Player::SaveToRedis()
 		{"y", std::to_string(y_)},
 		{"hp", std::to_string(hp_)},
 		{"level", std::to_string(level_)},
-		{"exp", std::to_string(exp_)}
+		{"exp", std::to_string(exp_)},
+		{"OnlineFlag", "1"} // 1 = 현재 접속 중(서버 죽으면 이 상태로 남음)
 	};
 
 	// HSET 명령어로 저장 (비동기)
 	g_redis_client->hmset(key, field_val, [](cpp_redis::reply& reply) {
 		// if (reply.is_error()) std::cout << "Redis Set Error\n";
 		});
+
+	// 만료 시간을 7일(604800초)로 재설정 (접속할 때마다 연장됨)
+	g_redis_client->expire(key, 604800);
 
 	// 변경사항 커밋
 	g_redis_client->commit();
