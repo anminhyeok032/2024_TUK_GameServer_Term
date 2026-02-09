@@ -8,7 +8,8 @@
 /CLIENT/Debug 
 /CLIENT/Release 
 /CLIENT/packages
-/CLIENT/client_sample/x64
+/CLIENT/client/x64
+/STRESS_TEST
 *.ilk 
 *.pdb 
 *.obj 
@@ -19,4 +20,6 @@
 *.lastbuildstate 
 *.suo 
 *.db 
-
+*.pptx
+*.fi
+*.vcxproj.user
