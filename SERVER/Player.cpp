@@ -1,6 +1,7 @@
-#include "Player.h"
+ï»¿#include "Player.h"
 #include "Npc.h"
 #include "RankingManager.h"
+#include "Inventory.h" // [Add]
 
 void print_error(const char* msg, int err_no)
 {
@@ -10,9 +11,19 @@ void print_error(const char* msg, int err_no)
 		MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
 		reinterpret_cast<LPWSTR>(&msg_buf), 0, NULL);
 	std::cout << msg;
-	std::wcout << L" : ¿¡·¯ : " << msg_buf;
+	std::wcout << L" : ì—ëŸ¬ : " << msg_buf;
 	while (true);
 	LocalFree(msg_buf);
+}
+
+Player::Player() : socket_(INVALID_SOCKET), exp_(0), inventory_(nullptr)
+{
+	inventory_ = new Inventory(id_);
+}
+
+Player::~Player()
+{
+	if (inventory_) delete inventory_;
 }
 
 void Player::DoReceive()
@@ -54,7 +65,7 @@ void Player::DoSend(void* packet)
 {
 	unsigned short pkt_size = reinterpret_cast<unsigned short*>(packet)[0];
 
-	// [¾ÈÀüÀåÄ¡] ¹öÆÛ Å©±âº¸´Ù ÆĞÅ¶ÀÌ Å©¸é ¼­¹ö ÅÍÁö´Â °ÍÀ» ¹æÁö
+	// ë²„í¼ í¬ê¸°ë³´ë‹¤ íŒ¨í‚·ì˜ í¬ê¸°ê°€ í´ ê²½ìš° ì „ì†¡ ì¤‘ë‹¨
 	if (pkt_size > BUF_SIZE)
 	{
 		std::cout << "[CRITICAL] Packet Size(" << pkt_size
@@ -70,7 +81,7 @@ void Player::DoSend(void* packet)
 	sdata->comp_key_ = KEY_SEND;
 	ZeroMemory(&sdata->over_, sizeof(sdata->over_));
 
-	// WSASend ¿¡·¯ Ã¼Å© Ãß°¡
+	// WSASend ì—ëŸ¬ ì²´í¬ ì¶”ê°€
 	if (WSASend(socket_, &sdata->wsabuf_, 1, 0, 0, &sdata->over_, 0) == SOCKET_ERROR)
 	{
 		int err = WSAGetLastError();
@@ -95,7 +106,7 @@ void Player::SendMovePacket(int c_id)
 
 void Player::SendAddObjectPacket(int c_id)
 {
-	// ÀÚ½ÅÀÇ ºä¸®½ºÆ® °»½Å
+	// ìì‹ ì˜ ë·°ë¦¬ìŠ¤íŠ¸ì— ì¶”ê°€
 	mut_view_.lock();
 	view_list_.insert(c_id);
 	mut_view_.unlock();
@@ -151,7 +162,7 @@ void Player::DBLogin(SQLHDBC& hdbc)
 	SQLHSTMT hstmt = AllocateStatement(hdbc);
 	SQLRETURN retcode;
 
-	// Stored Procedure È£Ãâ ÁØºñ
+	// Stored Procedure í˜¸ì¶œ ì¤€ë¹„
 	retcode = SQLPrepare(hstmt, (SQLWCHAR*)L"{CALL sp_UserLogin(?)}", SQL_NTS);
 	if (!(retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO))
 	{
@@ -161,14 +172,14 @@ void Player::DBLogin(SQLHDBC& hdbc)
 		return;
 	}
 
-	// ¸Å°³º¯¼ö ¹ÙÀÎµù (user_id)
+	// íŒŒë¼ë¯¸í„° ë°”ì¸ë”© (user_id)
 	SQLWCHAR dId[NAME_LEN];
 	std::wstring wuser_id(name_, name_ + strlen(name_));
 	SQLBindParameter(hstmt, 1, SQL_PARAM_INPUT, SQL_C_WCHAR, SQL_WVARCHAR,
 		NAME_LEN, 0, (SQLPOINTER)wuser_id.c_str(),
 		wuser_id.size() * sizeof(wchar_t), nullptr);
 
-	// ½ÇÇà
+	// ì‹¤í–‰
 	retcode = SQLExecute(hstmt);
 	if (retcode != SQL_SUCCESS && retcode != SQL_SUCCESS_WITH_INFO)
 	{
@@ -178,7 +189,7 @@ void Player::DBLogin(SQLHDBC& hdbc)
 		return;
 	}
 
-	// °á°ú ¹ÙÀÎµù
+	// ê²°ê³¼ ë°”ì¸ë”©
 	SQLSMALLINT d_x, d_y, d_max_hp, d_level, d_visual;
 	SQLINTEGER d_exp;
 	SQLLEN cbId = 0, cb_x = 0, cb_y = 0, cb_max_hp = 0, cb_exp = 0, cb_level = 0, cb_visual = 0;
@@ -192,7 +203,7 @@ void Player::DBLogin(SQLHDBC& hdbc)
 	SQLBindCol(hstmt, 7, SQL_C_SSHORT, &d_visual, 0, &cb_visual);
 
 	
-	// ÇöÀç ÇØ´ç Ä³¸¯ÅÍ°¡ Á¢¼ÓÇØÀÖ´ÂÁö È®ÀÎÈÄ, Á¢¼ÓÇØÀÖÀ»½Ã Áßº¹Á¢¼Ó Â÷´Ü
+	// í˜„ì¬ í•´ë‹¹ ìºë¦­í„°ê°€ ì ‘ì†ì¤‘ì¸ì§€ í™•ì¸í›„, ì ‘ì†ì¤‘ì´ë¼ë©´ ì¤‘ë³µì ‘ì† ë°©ì§€
 	for (auto player : g_player_list)
 	{
 		if (player == id_) continue;
@@ -210,7 +221,7 @@ void Player::DBLogin(SQLHDBC& hdbc)
 	if (retcode == SQL_SUCCESS)
 	{
 		//wprintf(L"Login Success : User ID: %s, Location X: %d, Location Y: %d\n", dId, d_x, d_y);
-		// DB¿¡¼­ ¹ŞÀº Á¤º¸ ÃÊ±âÈ­
+		// DBì—ì„œ ë°›ì€ ì •ë³´ ì´ˆê¸°í™”
 		x_ = d_x;
 		y_ = d_y;
 		max_hp_ = d_max_hp;
@@ -219,7 +230,7 @@ void Player::DBLogin(SQLHDBC& hdbc)
 		level_ = d_level;
 		visual_ = d_visual;
 		
-		// ¼­¹ö Å©·¡½Ã½Ã, redisÀÇ Á¤º¸°¡ ´õ ÃÖ½ÅÀÌ¸é µ¤¾î½á¼­ »ì·ÁÁÖ±â
+		// ì„œë²„ í¬ë˜ì‹œì‹œ, redisì— ì •ë³´ê°€ ë” ìµœì‹ ì´ë©´ ë®ì–´ì”Œì›Œ ì£¼ê¸°
 		if (g_redis_client->is_connected())
 		{
 			std::string key(name_);
@@ -231,14 +242,14 @@ void Player::DBLogin(SQLHDBC& hdbc)
 			auto reply = future_reply.get();
 			if (reply.is_array() && reply.as_array().size() > 0)
 			{
-				std::cout << "[Recovery] Redis¿¡¼­ ÃÖ½Å µ¥ÀÌÅÍ¸¦ º¹±¸ : " << name_ << std::endl;
+				std::cout << "[Recovery] Redisì—ì„œ ìµœì‹  ë°ì´í„°ë¡œ ë³µêµ¬ : " << name_ << std::endl;
 
 				auto arr = reply.as_array();
 				for (size_t i = 0; i < arr.size(); i += 2) {
 					std::string field = arr[i].as_string();
 					std::string value = arr[i + 1].as_string();
 
-					// SQL µ¥ÀÌÅÍº¸´Ù Redis µ¥ÀÌÅÍ°¡ ÃÖ½ÅÀÌ¹Ç·Î µ¤¾î¾¸
+					// SQL ë°ì´í„°ë³´ë‹¤ Redis ë°ì´í„°ê°€ ìµœì‹ ì´ë¯€ë¡œ ë®ì–´ì”€
 					if (field == "x") x_ = (short)std::stoi(value);
 					else if (field == "y") y_ = (short)std::stoi(value);
 					else if (field == "hp") hp_ = std::stoi(value);
@@ -246,18 +257,20 @@ void Player::DBLogin(SQLHDBC& hdbc)
 					else if (field == "level") level_ = std::stoi(value);
 				}
 			}
+			// ì¸ë²¤í† ë¦¬ ë¡œë“œ
+			LoadInventoryFromRedis();
 		}
 
-		// ·Î±×ÀÎ ¼º°ø Á¤º¸¸¦ Redis¿¡µµ ¹é¾÷
+		// ë¡œê·¸ì¸ ì„±ê³µ ì •ë³´ë¥¼ Redisì—ë„ ê°±ì‹ 
 		SaveToRedis();
 
 		//===============
-		// Login ·ÎÁ÷ ½ÃÀÛ
+		// Login íŒ¨í‚· ì „ì†¡
 		//===============
 		SendLoginInfoPacket();
-		// ÀÚ½ÅÀÇ À§Ä¡ ¼½ÅÍ¿¡ ÀúÀå
+		// ìì‹ ì˜ ìœ„ì¹˜ ì„¹í„°ì— ë„£ê¸°
 		PutInSector();
-		// ÇØ´ç °´Ã¼ INGAME »óÅÂ·Î º¯°æ
+		// í•´ë‹¹ ê°ì²´ INGAME ìƒíƒœë¡œ ë³€ê²½
 		{
 			std::lock_guard<std::mutex> lock(mut_state_);
 			state_ = OS_INGAME;
@@ -266,7 +279,7 @@ void Player::DBLogin(SQLHDBC& hdbc)
 		for (auto& sector : around_sector_)
 		{
 			{
-				// ¼½ÅÍ¿¡ ´ëÇÑ lock
+				// ì„¹í„°ì— ëŒ€í•´ lock
 				std::lock_guard<std::mutex> sec_l(g_ObjectSector[sector].mut_sector_);
 				for (auto& id : g_ObjectSector[sector].sec_id_)
 				{
@@ -276,7 +289,7 @@ void Player::DBLogin(SQLHDBC& hdbc)
 					}
 
 					if (false == CanSee(id_, objects[id]->id_))	continue;
-					if (objects[id]->id_ == id_)	continue;	// ÀÚ±âÀÚ½ÅÀÏ¶§
+					if (objects[id]->id_ == id_)	continue;	// ìê¸°ìì‹ ì¼ë•Œ
 					objects[id]->SendAddObjectPacket(id_);
 					SendAddObjectPacket(objects[id]->id_);
 				}
@@ -303,7 +316,7 @@ void Player::DBLogout(SQLHDBC& hdbc)
 
 	std::wstring w_user_id(name_, name_ + strlen(name_));
 
-	// ÁØºñµÈ ¹®À¸·Î Stored Procedure È£Ãâ
+	// ì¤€ë¹„ëœ ë¬¸ìœ¼ë¡œ Stored Procedure í˜¸ì¶œ
 	retcode = SQLPrepare(hstmt, (SQLWCHAR*)L"{CALL sp_UserLogout(?, ?, ?, ?, ?, ?)}", SQL_NTS);
 	if (retcode != SQL_SUCCESS && retcode != SQL_SUCCESS_WITH_INFO) {
 		DisplayDBError(hstmt, SQL_HANDLE_STMT, retcode);
@@ -311,7 +324,7 @@ void Player::DBLogout(SQLHDBC& hdbc)
 		return;
 	}
 
-	// ÆÄ¶ó¹ÌÅÍ ¹ÙÀÎµù
+	// íŒŒë¼ë¯¸í„° ë°”ì¸ë”©
 	SQLBindParameter(hstmt, 1, SQL_PARAM_INPUT, SQL_C_WCHAR, SQL_WVARCHAR, w_user_id.size(), 0,
 		(SQLWCHAR*)w_user_id.c_str(), 0, NULL);
 	SQLBindParameter(hstmt, 2, SQL_PARAM_INPUT, SQL_C_SSHORT, SQL_INTEGER, 0, 0,
@@ -325,7 +338,7 @@ void Player::DBLogout(SQLHDBC& hdbc)
 	SQLBindParameter(hstmt, 6, SQL_PARAM_INPUT, SQL_C_SSHORT, SQL_INTEGER, 0, 0,
 		&level_, 0, NULL);
 
-	// ½ÇÇà
+	// ì‹¤í–‰
 	retcode = SQLExecute(hstmt);
 	if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO)
 	{
@@ -333,11 +346,11 @@ void Player::DBLogout(SQLHDBC& hdbc)
 			<< L"x = " << x_ << L", y = " << y_ << std::endl;
 
 
-		// Redis¿¡¼­ µ¥ÀÌÅÍ¸¦ »èÁ¦ÇÏÁö ¾ÊÀ½ - ·©Å· Á¤º¸ ¹× Á¶È¸¸¦ À§ÇØ
-		// ¸¶Áö¸· »óÅÂ¸¦ ÀúÀåÇÏ°í TTL¸¸ 7ÀÏ·Î À¯Áö½ÃÅ´ -> 7ÀÏ ÃÊ°ú½Ã »èÁ¦
+		// Redisì—ì„œ ë°ì´í„°ë¥¼ ì˜êµ¬ì €ì¥ ì•ˆí•¨ - íŒ¨í‚· ë°›ì„ ë•Œ ì¡°íšŒë¥¼ ìœ„í•´
+		// ì ‘ì†ì¤‘ ìƒíƒœë§Œ ê°±ì‹ í•˜ê³  TTLì„ 7ì¼ë¡œ ì¬ì„¤ì •í•¨ -> 7ì¼ ì´ˆê³¼ì‹œ ì‚­ì œ
 		SaveToRedis();
 
-		// SQL ÀúÀåÀÌ ¾ÈÀüÇÏ°Ô ³¡³µÀ¸¹Ç·Î Redis Ä³½Ã »èÁ¦
+		// SQL ì €ì¥ì„ ì™„ë£Œí•˜ê³  ì¢…ë£Œë˜ë¯€ë¡œ Redis ìºì‹œ ì œê±°
 		//DeleteFromRedis();
 
 		name_[0] = 0;
@@ -350,7 +363,7 @@ void Player::DBLogout(SQLHDBC& hdbc)
 	SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
 }
 
-void Player::SendAttackPacket(int attacker_id, int damaged_id, int exp)
+void Player::SendAttackPacket(int attacker_id, int damaged_id, int exp, char attack_type, char direction)
 {
 	SC_ATTACK_PACKET packet;
 	packet.size = sizeof(SC_ATTACK_PACKET);
@@ -360,6 +373,13 @@ void Player::SendAttackPacket(int attacker_id, int damaged_id, int exp)
 	packet.max_hp = objects[damaged_id]->max_hp_;
 	packet.hp = objects[damaged_id]->hp_;
 	packet.exp = exp;
+	
+	// ê³µê²© ì •ë³´ ì¶”ê°€
+	packet.attack_type = attack_type;
+	packet.direction = direction;
+	packet.center_x = objects[attacker_id]->x_; // ê³µê²©ì ìœ„ì¹˜ ê¸°ì¤€
+	packet.center_y = objects[attacker_id]->y_;
+
 	DoSend(&packet);
 }
 
@@ -367,7 +387,7 @@ void Player::ProcessPacket(char* packet)
 {
 	switch (packet[2])
 	{
-		// ·Î±×ÀÎ ÆĞÅ¶ Ã³¸®
+		// ë¡œê·¸ì¸ íŒ¨í‚· ì²˜ë¦¬
 		case CS_LOGIN:
 		{
 			CS_LOGIN_PACKET* p = reinterpret_cast<CS_LOGIN_PACKET*>(packet);
@@ -377,7 +397,7 @@ void Player::ProcessPacket(char* packet)
 
 			break;
 		}
-		// ÀÌµ¿ ÆĞÅ¶ Ã³¸®
+		// ì´ë™ íŒ¨í‚· ì²˜ë¦¬
 		case CS_MOVE:
 		{
 			CS_MOVE_PACKET* p = reinterpret_cast<CS_MOVE_PACKET*>(packet);
@@ -393,24 +413,24 @@ void Player::ProcessPacket(char* packet)
 			case 2: if (x > 0) x--; break;
 			case 3: if (x < W_WIDTH - 1) x++; break;
 			}
-			// TODO : Àå¾Ö¹° Ã¼Å© ÇØ¾ßÇÔ
+			// TODO : ì¥ì• ë¬¼ ì²´í¬ í•´ì•¼í•¨
 			x_ = x;
 			y_ = y;
 
-			// Sector ÀÌµ¿
+			// Sector ì´ë™
 			PutInSector();
 
-			// ±âÁ¸ ½Ã¾ß¿¡ ÀÖ´Â ÇÃ·¹ÀÌ¾î¿Í »õ·Î¿î ½Ã¾ß¿¡ ÀÖ´Â ÇÃ·¹ÀÌ¾î ºñ±³
+			// ê¸°ì¡´ ì‹œì•¼ì— ìˆëŠ” í”Œë ˆì´ì–´ ëª©ë¡ê³¼ ì‹œì•¼ì— ìˆëŠ” í”Œë ˆì´ì–´ ì…‹
 			mut_view_.lock();
 			std::unordered_set<int> prev_viewlist = view_list_;
 			mut_view_.unlock();
 			std::unordered_set<int> curr_viewlist;
 
-			// ÀÚ½ÅÀÇ around_sector¿¡ ÀÖ´Â object°¡ ½Ã¾ß¿¡ º¸ÀÌ´ÂÁö °Ë»ç->curr_viewlist¿¡ »ğÀÔ
+			// ìì‹ ì˜ around_sectorì— ìˆëŠ” objectê°€ ì‹œì•¼ì— ë³´ì´ëŠ”ì§€ ê²€ì‚¬->curr_viewlistì— ì‚½ì…
 			for (auto& sector : around_sector_)
 			{
 				{
-					// ¼½ÅÍ¿¡ ´ëÇÑ lock
+					// ì„¹í„°ì— ëŒ€í•´ lock
 					std::lock_guard<std::mutex> sec_l(g_ObjectSector[sector].mut_sector_);
 					for (auto& id : g_ObjectSector[sector].sec_id_)
 					{
@@ -420,11 +440,11 @@ void Player::ProcessPacket(char* packet)
 						}
 
 						if (false == CanSee(id_, objects[id]->id_))	continue;
-						if (objects[id]->id_ == id_)	continue;	// ÀÚ±âÀÚ½ÅÀÏ¶§
-						// NPCÀÏ °æ¿ì WakeUp È£Ãâ ·ÎÁ÷
+						if (objects[id]->id_ == id_)	continue;	// ìê¸°ìì‹ ì¼ë•Œ
+						// NPCì¼ ê²½ìš° WakeUp í˜¸ì¶œ ê²€ì‚¬
 						if (IsNpc(objects[id]->id_))
 						{
-							// objects ¹è¿­ÀÌ ºÎ¸ğ Å¬·¡½º(Session µî) Æ÷ÀÎÅÍ¶ó¸é Ä³½ºÆÃ ÇÊ¿ä
+							// objects ë°°ì—´ì€ ë¶€ëª¨ í´ë˜ìŠ¤(Session *) í¬ì¸í„°ë¼ ìºìŠ¤íŒ… í•„ìš”
 							Npc* npc = dynamic_cast<Npc*>(objects[id].get());
 							if (npc) {
 								npc->WakeUpNpc(id_);
@@ -435,9 +455,9 @@ void Player::ProcessPacket(char* packet)
 					}
 				}
 			}
-			// ÀÚ½Å¿¡°Ô ÀÌµ¿ Àü¼Û
+			// ìì‹ ì—ê²Œ ì´ë™ ì „ì†¡
 			SendMovePacket(id_);
-			// °Ë»çÇÑ ½Ã¾ß¸¦ ÀÌ¿ëÇØ °¢ ¿ÀºêÁ§Æ®µé ÀÌµ¿
+			// ê²€ì‚¬í•œ ì‹œì•¼ë¥¼ ì´ìš©í•´ì„œ ìƒˆ ì˜¤ë¸Œì íŠ¸ì™€ ì´ë™
 			for (int ano_id : curr_viewlist)
 			{
 				if (0 == prev_viewlist.count(ano_id))
@@ -467,7 +487,7 @@ void Player::ProcessPacket(char* packet)
 			y_ = rand() % W_HEIGHT;
 			break;
 		}
-		// Ã¤ÆÃ ÆĞÅ¶ Ã³¸®
+		// ì±„íŒ… íŒ¨í‚· ì²˜ë¦¬
 		case CS_CHAT:
 		{
 			CS_CHAT_PACKET* p = reinterpret_cast<CS_CHAT_PACKET*>(packet);
@@ -480,7 +500,7 @@ void Player::ProcessPacket(char* packet)
 			}
 			break;
 		}
-		// °ø°İÃ³¸®
+		// ê³µê²©ì²˜ë¦¬
 		case CS_ATTACK:
 		{
 			CS_ATTACK_PACKET* p = reinterpret_cast<CS_ATTACK_PACKET*>(packet);
@@ -492,7 +512,7 @@ void Player::ProcessPacket(char* packet)
 			std::vector<std::pair<short, short>> attack_coord;
 			short attack_x = x_;
 			short attack_y = y_;
-			// ±âº» ¹æÇâ °ø°İ µ¥¹ÌÁö 10, ¹üÀ§°ø°İ µ¥¹ÌÁö 5
+			// ê¸°ë³¸ ê³µê²© í”¼í•´ëŸ‰ì€ 10, ë²”ìœ„ê³µê²© í”¼í•´ëŸ‰ì€ 5
 			int damage = 10;
 
 			switch (p->attack_direction) {
@@ -524,7 +544,7 @@ void Player::ProcessPacket(char* packet)
 					attack_coord.emplace_back(attack_x, attack_y);
 				}
 				break;
-			case 4:		// 4¹æÇâ °ø°İ
+			case 4:		// 4ë°©í–¥ ê³µê²©
 			{
 				const std::array<std::pair<short, short>, 4> directions = 
 				{
@@ -548,10 +568,10 @@ void Player::ProcessPacket(char* packet)
 			}
 			}
 			
-			// °ø°İ ÆÇÁ¤
+			// ê³µê²© ì ìš©
 			for(const auto& coord : attack_coord)
 			{
-				// °ø°İ À§Ä¡¿¡ ´ëÇÑ ¼½ÅÍ¸¦ µ¹¸é¼­ °Ë»çÇÔ
+				// ê³µê²© ìœ„ì¹˜ì— ë§ëŠ” ì„¹í„°ë¥¼ ì–»ì–´ì„œ ê²€ì‚¬í•¨
 				std::pair<int, int> sector_key = { coord.first / SEC_ROW, coord.second / SEC_COL };
 				auto& sector = g_ObjectSector[sector_key];
 				std::lock_guard<std::mutex> lock(sector.mut_sector_);
@@ -565,20 +585,20 @@ void Player::ProcessPacket(char* packet)
 					}
 					if (objects[id]->x_ == coord.first && objects[id]->y_ == coord.second)
 					{
-						// °ø°İ ÆÇÁ¤
+						// ê³µê²© ì„±ê³µ
 						objects[id]->hp_ -= damage;
 						objects[id]->SendStatChangePacket();
 
-						// TODO: °æÇèÄ¡ ÆÇÁ¤ÀÌ µé¾î°¡¾ßÇÔ
-						// °ø°İ ÆÇÁ¤ ¸Â´Â »ç¶÷ ÀÔÀå view_list ºê·Îµå Ä³½ºÆÃ
+						
+						// ë§ì€ ê²ƒì„ ë³´ëŠ” ëª¨ë“  ìœ ì € view_list í•œí…Œë„ ìºìŠ¤íŒ…
 						for (auto& view_list : objects[id]->view_list_)
 						{
-							objects[view_list]->SendAttackPacket(id_, objects[id]->id_, 0);
+							objects[view_list]->SendAttackPacket(id_, objects[id]->id_, 0, p->attack_type, p->attack_direction);
 						}
 
 						if (objects[id]->hp_ <= 0)
 						{
-							// Á×À½ Ã³¸®
+							// ì‚¬ë§ ì²˜ë¦¬
 							objects[id]->hp_ = 0;
 							objects[id]->state_ = OS_DEAD;
 							int getting_exp = objects[id]->level_ * objects[id]->level_ * 2;
@@ -594,10 +614,10 @@ void Player::ProcessPacket(char* packet)
 							SendStatChangePacket();
 							for (auto& view_list : objects[id]->view_list_)
 							{
-								objects[view_list]->SendAttackPacket(id_, objects[id]->id_, getting_exp);
+								objects[view_list]->SendAttackPacket(id_, objects[id]->id_, getting_exp, p->attack_type, p->attack_direction);
 							}
 
-							// NpcÀÇ ºä¸®½ºÆ®¿¡ ÀÖ´Â PlayerÇÑÅ×¸¸ º¸³¿
+							// Npcì˜ ì–´ê·¸ë¡œë¦¬ìŠ¤íŠ¸ì— ìˆëŠ” Playerë“¤ì—ê²Œë§Œ ì „ì†¡
 							for (auto& view_list : objects[id]->view_list_)
 							{
 								objects[view_list]->SendRemoveObjectPacket(id);
@@ -612,50 +632,117 @@ void Player::ProcessPacket(char* packet)
 		}
 		case CS_RANKING_REQ:
 		{
-			// ÄğÅ¸ÀÓ Ã¼Å© (3ÃÊ) - µğµµ½º ¹æÁö
+			// ì¿¨íƒ€ì„ ì²´í¬ (3ì´ˆ) - ëª¨ë‘ë‹¤ ìš”ì²­
 			auto now = std::chrono::system_clock::now();
 			if (now - last_rank_req_time_ < std::chrono::seconds(3)) return;
 			last_rank_req_time_ = now;
 
-			// ¸Å´ÏÀú¿¡°Ô Àü¼Û À§ÀÓ (DB/Redis Á¶È¸ ¾ÈÇÔ, ¸Ş¸ğ¸®¿¡¼­ ¹Ù·Î ÁÜ)
+			// ë§¤ë‹ˆì €ì—ê²Œ ì „ì†¡ ìš”ì²­ (DB/Redis ì¡°íšŒ ì—†ì´, ë©”ëª¨ë¦¬ì—ì„œ ë°”ë¡œ ì¤Œ)
 			RankingManager::GetInstance()->SendRankingToPlayer(id_);
+			break;
+		}
+		// ì•„ì´í…œ ì´ë™ íŒ¨í‚· ì²˜ë¦¬
+		case CS_ITEM_MOVE:
+		{
+			CS_ITEM_MOVE_PACKET* p = reinterpret_cast<CS_ITEM_MOVE_PACKET*>(packet);
+			bool success = inventory_->MoveItem(p->item_uid, p->new_x, p->new_y, p->is_rotated);
+			
+			// TODO: ê²°ê³¼ë¥¼ í´ë¼ì´ì–¸íŠ¸ì— ì „ì†¡ (SC_ITEM_MOVE_RESULT_PACKET)
+			// í˜„ì¬ëŠ” ë©”ëª¨ë¦¬ ìƒì—ì„œë§Œ ì´ë™
+			// ì„±ê³µí–ˆë‹¤ë©´ Redisì—ë„ ë°”ë¡œ ë°˜ì˜ (Dirty Flag ë°©ì‹ ëŒ€ì‹  ì¦‰ì‹œ ë°˜ì˜)
+			if (success) SaveInventoryToRedis();
 			break;
 		}
 	}
 }
 
-// ÇÃ·¹ÀÌ¾î Á¤º¸¸¦ Redis¿¡ ÀúÀå (½Ç½Ã°£ ¹é¾÷¿ë)
+// í”Œë ˆì´ì–´ ì •ë³´ë¥¼ Redisì— ì €ì¥ (ì‹¤ì‹œê°„ ë™ê¸°í™”)
 void Player::SaveToRedis()
 {
 	if (!g_redis_client->is_connected()) return;
 
-	// Redis Key ¼³Á¤
+	// Redis Key ìƒì„±
 	std::string key(name_);
 	key = "User:" + key;
 
-	// vector of pair·Î ÇÊµå¿Í °ª ÁöÁ¤
+	// vector of pairë¡œ í•„ë“œê°’ ì…‹ ì„¤ì •
 	std::vector<std::pair<std::string, std::string>> field_val = {
 		{"x", std::to_string(x_)},
 		{"y", std::to_string(y_)},
 		{"hp", std::to_string(hp_)},
 		{"level", std::to_string(level_)},
 		{"exp", std::to_string(exp_)},
-		{"OnlineFlag", "1"} // 1 = ÇöÀç Á¢¼Ó Áß(¼­¹ö Á×À¸¸é ÀÌ »óÅÂ·Î ³²À½)
+		{"OnlineFlag", "1"} // 1 = í˜„ì¬ ì ‘ì† ì¤‘(ì„œë²„ ì¼œì§€ëŠ” ì¤‘ ìƒíƒœë¡œ ë³µêµ¬)
 	};
 
-	// HSET ¸í·É¾î·Î ÀúÀå (ºñµ¿±â)
+	// HSET ëª…ë ¹ì–´ë¡œ ì €ì¥ (ë¹„ë™ê¸°)
 	g_redis_client->hmset(key, field_val, [](cpp_redis::reply& reply) {
 		// if (reply.is_error()) std::cout << "Redis Set Error\n";
 		});
 
-	// ¸¸·á ½Ã°£À» 7ÀÏ(604800ÃÊ)·Î Àç¼³Á¤ (Á¢¼ÓÇÒ ¶§¸¶´Ù ¿¬ÀåµÊ)
+	// ë§Œë£Œ ì‹œê°„ì€ 7ì¼(604800ì´ˆ)ë¡œ ì¬ì„¤ì • (ì ‘ì†í•  ë•Œë§ˆë‹¤ ê°±ì‹ ë¨)
 	g_redis_client->expire(key, 604800);
 
-	// º¯°æ»çÇ× Ä¿¹Ô
+	// íŒŒì´í”„ë¼ì¸ ì»¤ë°‹
 	g_redis_client->commit();
+
+	// ì¸ë²¤í† ë¦¬ë„ ê°™ì´ ì €ì¥
+	SaveInventoryToRedis();
 }
 
-// Redis¿¡¼­ µ¥ÀÌÅÍ »èÁ¦ (·Î±×¾Æ¿ô ÈÄ SQL ÀúÀå ¿Ï·á ½Ã)
+void Player::SaveInventoryToRedis()
+{
+	if (!g_redis_client->is_connected() || !inventory_) return;
+
+	std::string key = "UserInventory:" + std::string(name_);
+	
+	// [Mod] Inventory í´ë˜ìŠ¤ì˜ í—¬í¼ í•¨ìˆ˜ ì‚¬ìš©
+	std::vector<std::pair<std::string, std::string>> field_val = inventory_->GetInventoryDataForRedis();
+
+	if (!field_val.empty()) 
+	{
+		g_redis_client->hmset(key, field_val, [](cpp_redis::reply& reply) {});
+		g_redis_client->expire(key, 604800);
+		g_redis_client->commit();
+	}
+}
+
+void Player::LoadInventoryFromRedis()
+{
+	if (!g_redis_client->is_connected() || !inventory_) return;
+
+	std::string key = "UserInventory:" + std::string(name_);
+	auto future_reply = g_redis_client->hgetall(key);
+	g_redis_client->sync_commit();
+
+	auto reply = future_reply.get();
+	if (reply.is_array())
+	{
+		auto arr = reply.as_array();
+		for (size_t i = 0; i < arr.size(); i += 2)
+		{
+			std::string item_uid_str = arr[i].as_string();
+			std::string val_str = arr[i + 1].as_string();
+
+			// íŒŒì‹± "TID:CNT:X:Y:R"
+			int tid, cnt, x, y, rot;
+			if (sscanf_s(val_str.c_str(), "%d:%d:%d:%d:%d", &tid, &cnt, &x, &y, &rot) == 5)
+			{
+				Item* newItem = new Item();
+				newItem->item_uid = std::stoll(item_uid_str);
+				newItem->template_id = tid;
+				newItem->count = cnt;
+				newItem->x = (short)x;
+				newItem->y = (short)y;
+				newItem->is_rotated = (bool)rot;
+
+				inventory_->PlaceItem(newItem, x, y, newItem->is_rotated);
+			}
+		}
+	}
+}
+
+// Redisì—ì„œ ë°ì´í„° ì‚­ì œ (ë¡œê·¸ì•„ì›ƒ í›„ SQL ì €ì¥ ì™„ë£Œ ì‹œ)
 void Player::DeleteFromRedis()
 {
 	if (!g_redis_client->is_connected()) return;

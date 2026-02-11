@@ -1,12 +1,14 @@
-#pragma once
+ï»¿#pragma once
 #include "OVER.h"
 
-
+// [Session]
+// í”Œë ˆì´ì–´ì™€ NPCì˜ ê³µí†µ ë¶€ëª¨ í´ë˜ìŠ¤
+// ë„¤íŠ¸ì›Œí¬ ì—°ê²°(OVER), ìœ„ì¹˜(x,y), ìŠ¤íƒ¯(hp, level) ë“±ì˜ ê³µí†µ ì†ì„±ì„ ê´€ë¦¬
 
 class SESSION
 {
 public:
-	// player¿Í npcÀÇ °øÅë ¸â¹ö º¯¼ö
+	// playerì™€ npcì˜ ê³µí†µ í•„ìš” ì†ì„±
 	OVER recv_over_;
 	int id_;
 	short x_, y_;
@@ -15,22 +17,22 @@ public:
 	int	level_;
 	char name_[NAME_SIZE];
 
-	// ¼½ÅÍ Á¤º¸¿Í ºä¸®½ºÆ®
+	// í˜„ì¬ ìœ„ì¹˜í•œ ì„¹í„°
 	std::pair<int, int> current_sector_;
 	std::set<std::pair<int, int>> around_sector_;
 	std::unordered_set<int> view_list_;
 
-	// packet ÀçÁ¶¸³
+	// packet ì¡°ë¦½ìš© ë²„í¼
 	std::vector<char> prev_packet_;
 
 	// mutex
-	std::mutex mut_view_;	// view_list_¿¡ ´ëÇÑ mutex
-	std::mutex mut_state_;	// state_¿¡ ´ëÇÑ mutex
+	std::mutex mut_view_;	// view_list_ì— ëŒ€í•œ mutex
+	std::mutex mut_state_;	// state_ì— ëŒ€í•œ mutex
 
-	// ÇöÀç °´Ã¼ »ç¿ë ¿©ºÎ
+	// í˜„ì¬ ê°ì²´ ìƒíƒœ ì •ë³´
 	OBJECT_STATE state_;
 
-	// ½Ã°£ °è»ê¿ë
+	// ì‹œê°„ ì •ë³´
 	int last_move_time_;
 
 public:
@@ -44,7 +46,7 @@ public:
 		prev_packet_.clear();
 		current_sector_ = { -99, -99 };
 	}
-	~SESSION() {}
+	virtual ~SESSION() {} // ê°€ìƒ ì†Œë©¸ì (ì¤‘ìš”)
 
 	// Player
 	virtual void DoReceive() {};
@@ -56,7 +58,10 @@ public:
 	virtual void SendRemoveObjectPacket(int c_id) {};
 	virtual void SendChatPacket(int c_id, char mess[CHAT_SIZE]) {}
 	virtual void SendStatChangePacket() {};
-	virtual void SendAttackPacket(int attacker_id, int damaged_id, int exp) {}
+	
+	// ê³µê²© íŒ¨í‚· ì¸ì ì¶”ê°€ (ì‹œê°í™”ìš©)
+	virtual void SendAttackPacket(int attacker_id, int damaged_id, int exp, char attack_type, char direction) {}
+	
 	virtual void ProcessPacket(char* packet) {};
 
 	virtual void DBLogin(SQLHDBC& hdbc) {};
@@ -76,7 +81,7 @@ public:
 	virtual void WakeUpNpc(int p_id) {};
 	virtual void SetStartPos(int x, int y) {}
 
-	// °øÅë
+	// ì„¹í„°
 	void PutInSector();
 };
 

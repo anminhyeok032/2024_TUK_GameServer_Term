@@ -1,4 +1,4 @@
-#pragma once
+癤�#pragma once
 #include <iostream>
 #include <WS2tcpip.h>
 #include <MSWSock.h>
@@ -20,6 +20,7 @@
 #include <cmath>
 
 #include "include/lua.hpp"
+#include "Constants.h"
 
 #pragma comment(lib, "WS2_32.lib")
 #pragma comment(lib, "MSWSock.lib")
@@ -30,11 +31,11 @@
 #define NAME_LEN 50  
 #define PHONE_LEN 60
 
-// redis 라이브러리
+// redis 
 #include <cpp_redis/cpp_redis>
 #include <future>
 
-//// global 변수
+//// global 
 constexpr int BUF_SIZE = 4096;
 
 extern SOCKET g_server_socket, g_client_socket;
@@ -49,11 +50,6 @@ extern std::map <std::pair<int, int>, Sector> g_ObjectSector;
 extern std::unordered_set<int> g_player_list;
 extern std::mutex g_mut_player_list;
 
-constexpr int VIEW_RANGE = 15;
-constexpr int SEC_RANGE = VIEW_RANGE;
-constexpr int SEC_ROW = 15;
-constexpr int SEC_COL = 15;
-
 void print_error(const char* msg, int err_no);	
 bool CanSee(int curr, int other);
 bool IsNpc(int a);
@@ -63,12 +59,12 @@ void disconnect(int c_id);
 
 extern std::unique_ptr<cpp_redis::client> g_redis_client;
 
-// 문자열 변환 유틸 (SQL WCHAR <-> Redis string)
+// 
 std::string WStringToString(const std::wstring& wstr);
 std::string WStringToString(const SQLWCHAR* wstr);
 bool ConnectWithRedis();
 
-// DB 수행하기 위한 struct와 queue
+// DB struct queue
 struct DBRequest
 {
 	enum DBType { LOGIN, LOGOUT, SAVE_REDIS };
@@ -125,15 +121,15 @@ struct EVENT
 	EVENT_TYPE e_type_;
 	int target_id_;
 
-	// priority_queue 정렬을 위한 < 오버라이드
+	// priority_queue 
 	constexpr bool operator<(const EVENT& other) const
 	{
 		return this->wakeup_time_ > other.wakeup_time_;
 	}
 };
 
-// lock-free thread-safe 우선순위 큐
-// clear는 thread-safe하지 않음
+// lock-free thread-safe 
+// clear thread-safe
 extern concurrency::concurrent_priority_queue<EVENT> g_event_queue;
 
 void AddTimer(int id, EVENT_TYPE type, int ms, int target_id);

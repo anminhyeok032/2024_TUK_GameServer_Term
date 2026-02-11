@@ -1,6 +1,8 @@
-#pragma once
+﻿#pragma once
 #include "Session.h"
 
+// 전방 선언
+class Inventory; 
 class RankingManager;
 
 class Player : public SESSION
@@ -12,9 +14,13 @@ public:
 	std::chrono::system_clock::time_point  last_action_time_;
 	std::chrono::system_clock::time_point last_rank_req_time_;
 
+	// 인벤토리 멤버
+	Inventory* inventory_; 
+
 public:
-	Player() : socket_(INVALID_SOCKET), exp_(0) {}
-	~Player() {}
+	// 생성자/소멸자 선언 (구현은 cpp)
+	Player();
+	~Player();
 
 	SOCKET GetSocket() { return socket_; };
 	void CloseSocket() { closesocket(socket_); socket_ = INVALID_SOCKET; }
@@ -28,12 +34,19 @@ public:
 	void SendAddObjectPacket(int c_id) override;
 	void SendRemoveObjectPacket(int c_id) override;
 	void SendChatPacket(int c_id, char mess[CHAT_SIZE]) override;
-	void SendAttackPacket(int attacker_id, int damaged_id, int exp) override;
+	
+	// 공격 패킷 인자 추가 (attack_type, direction)
+	void SendAttackPacket(int attacker_id, int damaged_id, int exp, char attack_type, char direction) override;
+	
 	void SendStatChangePacket() override;
 
 	void DBLogin(SQLHDBC& hdbc) override;
 	void DBLogout(SQLHDBC& hdbc) override;
 	void SaveToRedis() override;
+
+	// Inventory Redis Func
+	void SaveInventoryToRedis();
+	void LoadInventoryFromRedis();
 
 	void ProcessPacket(char* packet) override;
 

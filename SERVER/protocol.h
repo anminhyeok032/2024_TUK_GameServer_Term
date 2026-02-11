@@ -1,21 +1,15 @@
-constexpr int PORT_NUM = 4000;
-constexpr int NAME_SIZE = 20;
-constexpr int CHAT_SIZE = 300;
-
-constexpr int MAX_USER = 20000;
-constexpr int MAX_NPC = 200000;
-
-constexpr int W_WIDTH = 2000;
-constexpr int W_HEIGHT = 2000;
+ï»¿#pragma once
+#include "Constants.h"
 
 // Packet ID
 constexpr char CS_LOGIN = 0;
 constexpr char CS_MOVE = 1;
 constexpr char CS_CHAT = 2;
-constexpr char CS_ATTACK = 3;			// 4 ¹æÇâ °ø°İ
-constexpr char CS_TELEPORT = 4;			// RANDOMÇÑ À§Ä¡·Î Teleport, Stress TestÇÒ ¶§ Hot SpotÇö»óÀ» ÇÇÇÏ±â À§ÇØ ±¸Çö
-constexpr char CS_LOGOUT = 5;			// Å¬¶óÀÌ¾ğÆ®¿¡¼­ Á¤»óÀûÀ¸·Î Á¢¼ÓÀ» Á¾·áÇÏ´Â ÆĞÅ¶
+constexpr char CS_ATTACK = 3;			// 4 ë°©í–¥ ê³µê²©
+constexpr char CS_TELEPORT = 4;			// RANDOMí•œ ìœ„ì¹˜ë¡œ Teleport, Stress Testë•Œ í•«ìŠ¤íŒŸìœ¼ë¡œ ì´ë™í•˜ê¸° ìœ„í•´ ì‚¬ìš©
+constexpr char CS_LOGOUT = 5;			// í´ë¼ì´ì–¸íŠ¸ì—ì„œ ì •ìƒì ìœ¼ë¡œ ì¢…ë£Œë¥¼ ì•Œë¦¬ëŠ” íŒ¨í‚·
 constexpr char CS_RANKING_REQ = 6;
+constexpr char CS_ITEM_MOVE = 7;		// ì•„ì´í…œ ì´ë™ ìš”ì²­
 
 constexpr char SC_LOGIN_INFO = 2;
 constexpr char SC_LOGIN_FAIL = 3;
@@ -24,16 +18,17 @@ constexpr char SC_REMOVE_OBJECT = 5;
 constexpr char SC_MOVE_OBJECT = 6;
 constexpr char SC_CHAT = 7;
 constexpr char SC_STAT_CHANGE = 8;
-constexpr char SC_ATTACK = 9;			// °ø°İ Ç¥ÇöÀ§ÇØ Ãß°¡
+constexpr char SC_ATTACK = 9;			// ê³µê²© í‘œì‹œëŠ” ë³„ë„ ì¶”ê°€
 constexpr char SC_RANKING = 10;
+constexpr char SC_ITEM_MOVE_RESULT = 11; // ì•„ì´í…œ ì´ë™ ê²°ê³¼
 
 #pragma pack (push, 1)
 
-// ·©Å· ÇÑ ÁÙ Á¤º¸ (~28 ¹ÙÀÌÆ®)
+// íŒ¨í‚· ë§¨ ì• êµ¬ì¡° (~28 ë°”ì´íŠ¸)
 struct RankInfo {
-	char name[NAME_SIZE]; // ÀÌ¸§
-	int rank;             // µî¼ö
-	int level;            // ·¹º§
+	char name[NAME_SIZE]; // ì´ë¦„
+	int rank;             // ë“±ìˆ˜
+	int level;            // ë ˆë²¨
 };
 
 struct CS_LOGIN_PACKET {
@@ -50,12 +45,12 @@ struct CS_MOVE_PACKET {
 };
 
 struct CS_CHAT_PACKET {
-	unsigned short size;			// Å©±â°¡ °¡º¯ÀÌ´Ù, mess°¡ ÀÛÀ¸¸é sizeµµ ÁÙÀÌÀÚ.
+	unsigned short size;			// í¬ê¸°ê°€ ê°€ë³€ì´ë‹¤, messì˜ ì‹¤ì œ sizeë¥¼ ë³´ë‚¸ë‹¤.
 	char	type;
 	char	mess[CHAT_SIZE];
 };
 
-struct CS_TELEPORT_PACKET {			// ·£´ıÀ¸·Î ÅÚ·¹Æ÷Æ® ÇÏ´Â ÆĞÅ¶, µ¿Á¢ Å×½ºÆ®¿¡ ÇÊ¿ä
+struct CS_TELEPORT_PACKET {			// ê°•ì œë¡œ ì¢Œí‘œì´ë™ í•˜ëŠ” íŒ¨í‚·, ë””ë²„ê¹…ìš©
 	unsigned short size;
 	char	type;
 };
@@ -65,23 +60,34 @@ struct CS_LOGOUT_PACKET {
 	char	type;
 };
 
-// °ø°İ ¹æÇâ ±¸Çö À§ÇØ Ãß°¡
+// ê³µê²© íŒ¨í‚· ë°©í–¥ ì •ë³´ ì¶”ê°€
 struct CS_ATTACK_PACKET {
 	unsigned short size;
 	char	type;
-	char	attack_direction;  // 0 : UP, 1 : DOWN, 2 : LEFT, 3 : RIGHT, 4 : 4¹æÇâ °ø°İ
+	char	attack_type;	// 0: í‰íƒ€, 1: ë²”ìœ„
+	char	attack_direction;  // 0 : UP, 1 : DOWN, 2 : LEFT, 3 : RIGHT, 4 : 4ë°©í–¥
 };
 
-// [Client -> Server] ·©Å· ¿äÃ» ÆĞÅ¶
+// [Client -> Server] ë­í‚¹ ìš”ì²­ íŒ¨í‚·
 struct CS_RANKING_REQ_PACKET {
 	unsigned short size;
 	char type;
 };
 
+// ì•„ì´í…œ ì´ë™ ìš”ì²­ íŒ¨í‚·
+struct CS_ITEM_MOVE_PACKET {
+	unsigned short size;
+	char type;
+	long long item_uid;	// ì´ë™í•  ì•„ì´í…œì˜ ê³ ìœ  ID
+	short new_x;		// ëª©í‘œ ì¸ë²¤í† ë¦¬ x ì¢Œí‘œ
+	short new_y;		// ëª©í‘œ ì¸ë²¤í† ë¦¬ y ì¢Œí‘œ
+	bool is_rotated;	// íšŒì „ ì—¬ë¶€
+};
+
 struct SC_LOGIN_INFO_PACKET {
 	unsigned short size;
 	char	type;
-	int		visual;				// Á¾Á·, ¼ºº°µîÀ» ±¸ºĞÇÒ ¶§ »ç¿ë
+	int		visual;				// ì™¸í˜•, ë‚˜ì¤‘ì— ì¥ë¹„ë¡œ ë°”ë€” ìˆ˜ ìˆìŒ
 	int		id;
 	int		hp;
 	int		max_hp;
@@ -94,7 +100,7 @@ struct SC_ADD_OBJECT_PACKET {
 	unsigned short size;
 	char	type;
 	int		id;
-	int		visual;				// ¾î¶»°Ô »ı±ä OBJECTÀÎ°¡¸¦ Áö½Ã
+	int		visual;				// ì–´ë–¤ ì¢…ë¥˜ì˜ OBJECTì¸ì§€ êµ¬ë¶„
 	short	x, y;
 	char	name[NAME_SIZE];
 };
@@ -143,13 +149,31 @@ struct SC_ATTACK_PACKET {
 	int		max_hp;
 	int		hp;
 	int     exp;
+	
+	// ê³µê²© ì‹œê°í™”ë¥¼ ìœ„í•œ ì •ë³´
+	char	attack_type;	// 0: í‰íƒ€, 1: ë²”ìœ„ê³µê²©
+	char	direction;		// í‰íƒ€ì¼ ë•Œ ë°©í–¥ (0:UP, 1:DOWN, 2:LEFT, 3:RIGHT)
+	short	center_x;		// ê³µê²©ì ìœ„ì¹˜ (ì´í™íŠ¸ ê¸°ì¤€ì )
+	short	center_y;
 };
 
-// ·©Å· ¸ñ·Ï ÆĞÅ¶ 
+// ë­í‚¹ ì „ì†¡ íŒ¨í‚·
 struct SC_RANKING_PACKET {
 	unsigned short size;
 	char type; // SC_RANKING
-	int count; // ÇöÀç ´ã±ä ·©Ä¿ ¼ö
-	RankInfo ranks[100]; // ÃÖ´ë 100¸í±îÁö
+	int count; // ì‹¤ì œ ë­í‚¹ ê°œìˆ˜
+	RankInfo ranks[100]; // ìµœëŒ€ 100ëª…ê¹Œì§€
 };
+
+// ì•„ì´í…œ ì´ë™ ê²°ê³¼ íŒ¨í‚·
+struct SC_ITEM_MOVE_RESULT_PACKET {
+	unsigned short size;
+	char type;
+	long long item_uid;
+	bool success;		// ì„±ê³µ ì—¬ë¶€
+	short x;			// ìµœì¢… í™•ì •ëœ x (ì‹¤íŒ¨ ì‹œ ì›ë˜ ìœ„ì¹˜)
+	short y;			// ìµœì¢… í™•ì •ëœ y
+	bool is_rotated;
+};
+
 #pragma pack (pop)

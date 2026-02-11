@@ -130,18 +130,25 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="DB.cpp" />
+    <ClCompile Include="Inventory.cpp" />
     <ClCompile Include="MainServer.cpp" />
     <ClCompile Include="Npc.cpp" />
     <ClCompile Include="Player.cpp" />
+    <ClCompile Include="RankingManager.cpp" />
+    <ClCompile Include="Redis.cpp" />
     <ClCompile Include="Session.cpp" />
     <ClCompile Include="Timer.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Constants.h" />
     <ClInclude Include="global.h" />
+    <ClInclude Include="Inventory.h" />
+    <ClInclude Include="Item.h" />
     <ClInclude Include="Npc.h" />
     <ClInclude Include="OVER.h" />
     <ClInclude Include="Player.h" />
     <ClInclude Include="protocol.h" />
+    <ClInclude Include="RankingManager.h" />
     <ClInclude Include="Session.h" />
   </ItemGroup>
   <ItemGroup>

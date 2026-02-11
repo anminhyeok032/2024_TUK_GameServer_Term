@@ -1,65 +1,100 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <Filter Include="소스 파일">
+    <Filter Include="Main">
       <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
       <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
     </Filter>
-    <Filter Include="헤더 파일">
+    <Filter Include="Core">
       <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
       <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
     </Filter>
-    <Filter Include="리소스 파일">
+    <Filter Include="Core\Network">
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
-      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="Core\DB">
+      <UniqueIdentifier>{e1945781-7f97-440e-a991-987032128a39}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Game">
+      <UniqueIdentifier>{1702f32c-3a32-4e44-84fb-4f3317c2f746}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Game\Object">
+      <UniqueIdentifier>{f383e2da-3382-4f3b-8287-287711283282}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Game\System">
+      <UniqueIdentifier>{a9831711-2821-4f3c-8239-281111728282}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Script">
+      <UniqueIdentifier>{c2182181-7212-4212-7212-721272127212}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="MainServer.cpp">
-      <Filter>소스 파일</Filter>
+      <Filter>Main</Filter>
     </ClCompile>
     <ClCompile Include="Session.cpp">
-      <Filter>소스 파일</Filter>
-    </ClCompile>
-    <ClCompile Include="Player.cpp">
-      <Filter>소스 파일</Filter>
-    </ClCompile>
-    <ClCompile Include="Npc.cpp">
-      <Filter>소스 파일</Filter>
+      <Filter>Core\Network</Filter>
     </ClCompile>
     <ClCompile Include="DB.cpp">
-      <Filter>소스 파일</Filter>
+      <Filter>Core\DB</Filter>
+    </ClCompile>
+    <ClCompile Include="Redis.cpp">
+      <Filter>Core\DB</Filter>
+    </ClCompile>
+    <ClCompile Include="Player.cpp">
+      <Filter>Game\Object</Filter>
+    </ClCompile>
+    <ClCompile Include="Npc.cpp">
+      <Filter>Game\Object</Filter>
+    </ClCompile>
+    <ClCompile Include="RankingManager.cpp">
+      <Filter>Game\System</Filter>
     </ClCompile>
     <ClCompile Include="Timer.cpp">
-      <Filter>소스 파일</Filter>
+      <Filter>Game\System</Filter>
+    </ClCompile>
+    <ClCompile Include="Inventory.cpp">
+      <Filter>Game\System</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="global.h">
-      <Filter>헤더 파일</Filter>
+      <Filter>Main</Filter>
+    </ClInclude>
+    <ClInclude Include="Constants.h">
+      <Filter>Main</Filter>
     </ClInclude>
     <ClInclude Include="protocol.h">
-      <Filter>헤더 파일</Filter>
+      <Filter>Main</Filter>
     </ClInclude>
     <ClInclude Include="OVER.h">
-      <Filter>헤더 파일</Filter>
+      <Filter>Core\Network</Filter>
     </ClInclude>
     <ClInclude Include="Session.h">
-      <Filter>헤더 파일</Filter>
+      <Filter>Core\Network</Filter>
     </ClInclude>
     <ClInclude Include="Player.h">
-      <Filter>헤더 파일</Filter>
+      <Filter>Game\Object</Filter>
     </ClInclude>
     <ClInclude Include="Npc.h">
-      <Filter>헤더 파일</Filter>
+      <Filter>Game\Object</Filter>
     </ClInclude>
-  </ItemGroup>
-  <ItemGroup>
-    <Library Include="lua54.lib" />
+    <ClInclude Include="Inventory.h">
+      <Filter>Game\System</Filter>
+    </ClInclude>
+    <ClInclude Include="Item.h">
+      <Filter>Game\System</Filter>
+    </ClInclude>
+    <ClInclude Include="RankingManager.h">
+      <Filter>Game\System</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="npc.lua">
-      <Filter>리소스 파일</Filter>
+      <Filter>Script</Filter>
     </None>
+  </ItemGroup>
+  <ItemGroup>
+    <Library Include="lua54.lib" />
   </ItemGroup>
 </Project>
