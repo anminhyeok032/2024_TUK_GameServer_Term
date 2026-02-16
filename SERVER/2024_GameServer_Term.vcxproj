@@ -132,6 +132,7 @@
     <ClCompile Include="DB.cpp" />
     <ClCompile Include="Inventory.cpp" />
     <ClCompile Include="MainServer.cpp" />
+    <ClCompile Include="MapItem.cpp" />
     <ClCompile Include="Npc.cpp" />
     <ClCompile Include="Player.cpp" />
     <ClCompile Include="RankingManager.cpp" />
@@ -144,6 +145,7 @@
     <ClInclude Include="global.h" />
     <ClInclude Include="Inventory.h" />
     <ClInclude Include="Item.h" />
+    <ClInclude Include="MapItem.h" />
     <ClInclude Include="Npc.h" />
     <ClInclude Include="OVER.h" />
     <ClInclude Include="Player.h" />

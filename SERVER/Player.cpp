@@ -1,7 +1,8 @@
 ﻿#include "Player.h"
 #include "Npc.h"
 #include "RankingManager.h"
-#include "Inventory.h" // [Add]
+#include "Inventory.h" 
+#include "MapItem.h"
 
 void print_error(const char* msg, int err_no)
 {
@@ -111,6 +112,13 @@ void Player::SendAddObjectPacket(int c_id)
 	view_list_.insert(c_id);
 	mut_view_.unlock();
 
+	// MapItem인 경우 다른 패킷 전송
+	if (true == IsMapItem(c_id)) 
+	{
+		objects[c_id]->SendAddObjectPacket(id_); // MapItem이 직접 패킷 만듦
+		return;
+	}
+
 	SC_ADD_OBJECT_PACKET packet;
 	packet.size = sizeof(SC_ADD_OBJECT_PACKET);
 	packet.type = SC_ADD_OBJECT;
@@ -127,6 +135,13 @@ void Player::SendRemoveObjectPacket(int c_id)
 	mut_view_.lock();
 	view_list_.erase(c_id);
 	mut_view_.unlock();
+
+	// MapItem인 경우 다른 패킷 전송
+	if (true == IsMapItem(c_id)) 
+	{
+		objects[c_id]->SendRemoveObjectPacket(id_);
+		return;
+	}
 
 	SC_REMOVE_OBJECT_PACKET packet;
 	packet.size = sizeof(SC_REMOVE_OBJECT_PACKET);
@@ -290,8 +305,18 @@ void Player::DBLogin(SQLHDBC& hdbc)
 
 					if (false == CanSee(id_, objects[id]->id_))	continue;
 					if (objects[id]->id_ == id_)	continue;	// 자기자신일때
-					objects[id]->SendAddObjectPacket(id_);
-					SendAddObjectPacket(objects[id]->id_);
+					
+					// MapItem 처리 추가
+					if (true == IsMapItem(objects[id]->id_)) 
+					{
+						objects[id]->SendAddObjectPacket(id_); // MapItem -> Me
+					} 
+					else 
+					{
+						objects[id]->SendAddObjectPacket(id_); // Other -> Me
+					}
+					
+					SendAddObjectPacket(objects[id]->id_); // Me -> Other
 				}
 			}
 		}
@@ -374,14 +399,36 @@ void Player::SendAttackPacket(int attacker_id, int damaged_id, int exp, char att
 	packet.hp = objects[damaged_id]->hp_;
 	packet.exp = exp;
 	
-	// 공격 정보 추가
 	packet.attack_type = attack_type;
 	packet.direction = direction;
-	packet.center_x = objects[attacker_id]->x_; // 공격자 위치 기준
+	packet.center_x = objects[attacker_id]->x_;
 	packet.center_y = objects[attacker_id]->y_;
 
 	DoSend(&packet);
 }
+
+
+// 빈 맵 아이템 슬롯 찾기
+int GetNewMapItemId() 
+{
+	// MAX_NPC + MAX_USER 부터 MAX_OBJECTS 사이의 빈 슬롯 찾기
+	for (int i = MAX_NPC + MAX_USER; i < MAX_OBJECTS; ++i)
+	{
+		if (objects[i] == nullptr) 
+		{
+			objects[i] = std::make_unique<MapItem>();
+			return i;
+		}
+		// 재사용 로직: state_ == OS_FREE인 것 찾기 (unique_ptr이므로 nullptr 체크 후 state 체크)
+		else
+		{
+			std::lock_guard<std::mutex> ll(objects[i]->mut_state_);
+			if (objects[i]->state_ == OS_FREE) return i;
+		}
+	}
+	return -1;
+}
+
 
 void Player::ProcessPacket(char* packet)
 {
@@ -462,20 +509,36 @@ void Player::ProcessPacket(char* packet)
 			{
 				if (0 == prev_viewlist.count(ano_id))
 				{
-					SendAddObjectPacket(ano_id);
-					objects[ano_id]->SendAddObjectPacket(id_);
+					// MapItem 처리
+					if (true == IsMapItem(ano_id)) 
+					{
+						objects[ano_id]->SendAddObjectPacket(id_);
+					} 
+					else 
+					{
+						SendAddObjectPacket(ano_id);
+						objects[ano_id]->SendAddObjectPacket(id_);
+					}
 				}
 				else
 				{
-					objects[ano_id]->SendMovePacket(id_);
+					if (false == IsMapItem(ano_id)) objects[ano_id]->SendMovePacket(id_);
 				}
 			}
 			for (int ano_id : prev_viewlist)
 			{
 				if (0 == curr_viewlist.count(ano_id))
 				{
-					SendRemoveObjectPacket(ano_id);
-					objects[ano_id]->SendRemoveObjectPacket(id_);
+					// MapItem 처리
+					if (true == IsMapItem(ano_id))
+					{
+						objects[ano_id]->SendRemoveObjectPacket(id_);
+					} 
+					else
+					{
+						SendRemoveObjectPacket(ano_id);
+						objects[ano_id]->SendRemoveObjectPacket(id_);
+					}
 				}
 			}
 
@@ -589,7 +652,7 @@ void Player::ProcessPacket(char* packet)
 						objects[id]->hp_ -= damage;
 						objects[id]->SendStatChangePacket();
 
-						
+						// TODO: 경험치 로직이 들어가야함
 						// 맞은 것을 보는 모든 유저 view_list 한테도 캐스팅
 						for (auto& view_list : objects[id]->view_list_)
 						{
@@ -653,6 +716,133 @@ void Player::ProcessPacket(char* packet)
 			if (success) SaveInventoryToRedis();
 			break;
 		}
+		// 아이템 버리기
+		case CS_ITEM_DROP:
+		{
+			CS_ITEM_DROP_PACKET* p = reinterpret_cast<CS_ITEM_DROP_PACKET*>(packet);
+			// 1. 인벤토리에서 제거 (성공 시 아이템 정보를 리턴받으면 좋겠지만, 일단 찾아서 제거)
+			// 현재 구조상 RemoveItem이 삭제만 하고 정보를 안 주므로, FindItem 먼저 호출
+			// 하지만 Inventory::FindItem 기능이 없음. items_ 맵에 접근해야 함.
+			// Inventory::RemoveItem이 성공하면 MapItem 생성
+			// (안전하게 하려면 Inventory 수정이 필요하지만, 여기선 items_ 접근 가능하다고 가정하거나 함수 추가)
+			
+			// 임시: Inventory::RemoveItem 호출 전 아이템 정보 확인 로직 필요
+			// 간단하게:
+			int map_id = GetNewMapItemId();
+			if (map_id != -1) 
+			{
+				if (inventory_->RemoveItem(p->item_uid))
+				{
+					// 2. MapItem 생성
+					MapItem* mapItem = dynamic_cast<MapItem*>(objects[map_id].get());
+					mapItem->id_ = map_id;
+					mapItem->x_ = x_;
+					mapItem->y_ = y_;
+					mapItem->item_uid = p->item_uid;
+					mapItem->template_id = 1001; // TODO: 실제 템플릿 ID 필요 (RemoveItem에서 리턴받아야 함)
+					mapItem->count = 1; // TODO
+					mapItem->state_ = OS_INGAME;
+					mapItem->PutInSector();
+					
+					// 주변 플레이어에게 알림
+					for (auto& sector : mapItem->around_sector_) 
+					{
+						std::lock_guard<std::mutex> sec_l(g_ObjectSector[sector].mut_sector_);
+						for (auto& pid : g_ObjectSector[sector].sec_id_)
+						{
+							if (true == IsPlayer(pid)) 
+							{
+								// 거리 체크
+								if (true == CanSee(mapItem->id_, pid)) 
+								{
+									mapItem->SendAddObjectPacket(pid);
+								}
+							}
+						}
+					}
+					
+					SaveInventoryToRedis(); // 변경 사항 저장
+				}
+			}
+			break;
+		}
+		// 아이템 줍기 (바람의 나라 스타일: 내 발밑 최신 아이템)
+		case CS_ITEM_PICKUP:
+		{
+			MapItem* target = nullptr;
+			std::chrono::system_clock::time_point latest_time;
+			bool found = false;
+
+			mut_view_.lock(); // view_list_ 안전하게 순회
+			for (int view_id : view_list_) 
+			{
+				if (true == IsMapItem(view_id)) 
+				{
+					if (objects[view_id]->x_ == x_ && objects[view_id]->y_ == y_) 
+					{
+						MapItem* item = dynamic_cast<MapItem*>(objects[view_id].get());
+						if (!item) continue;
+						
+						if (false == found || item->drop_time > latest_time)
+						{
+							target = item;
+							latest_time = item->drop_time;
+							found = true;
+						}
+					}
+				}
+			}
+			mut_view_.unlock();
+
+			if (target) 
+			{
+				// 줍기 성공
+				Item* newItem = new Item();
+				newItem->item_uid = target->item_uid;
+				newItem->template_id = target->template_id;
+				newItem->count = target->count;
+				// 인벤토리에 추가 (자동 빈칸)
+				if (inventory_->AddItem(newItem)) 
+				{
+					// 맵에서 제거
+					int target_id = target->id_;
+					
+					// 주변에 제거 알림
+					for (auto& sector : target->around_sector_) 
+					{
+						std::lock_guard<std::mutex> sec_l(g_ObjectSector[sector].mut_sector_);
+						for (auto& pid : g_ObjectSector[sector].sec_id_)
+						{
+							if (true == IsPlayer(pid)) 
+							{
+								if (true == CanSee(target_id, pid))
+								{
+									target->SendRemoveObjectPacket(pid);
+								}
+							}
+						}
+					}
+
+					// 객체 해제 (OS_FREE)
+					{
+						std::lock_guard<std::mutex> ll(objects[target_id]->mut_state_);
+						objects[target_id]->state_ = OS_FREE;
+					}
+					// 섹터에서 제거
+					std::pair<int, int> sec = target->current_sector_;
+					g_ObjectSector[sec].mut_sector_.lock();
+					g_ObjectSector[sec].sec_id_.erase(target_id);
+					g_ObjectSector[sec].mut_sector_.unlock();
+
+					SaveInventoryToRedis();
+				} 
+				else 
+				{
+					delete newItem; // 인벤 꽉 참
+				}
+			}
+			break;
+		}
 	}
 }
 
@@ -696,10 +886,9 @@ void Player::SaveInventoryToRedis()
 
 	std::string key = "UserInventory:" + std::string(name_);
 	
-	// [Mod] Inventory 클래스의 헬퍼 함수 사용
 	std::vector<std::pair<std::string, std::string>> field_val = inventory_->GetInventoryDataForRedis();
 
-	if (!field_val.empty()) 
+	if (!field_val.empty())
 	{
 		g_redis_client->hmset(key, field_val, [](cpp_redis::reply& reply) {});
 		g_redis_client->expire(key, 604800);
@@ -719,7 +908,7 @@ void Player::LoadInventoryFromRedis()
 	if (reply.is_array())
 	{
 		auto arr = reply.as_array();
-		for (size_t i = 0; i < arr.size(); i += 2)
+		for (size_t i = 0; i < arr.size(); i += 2) 
 		{
 			std::string item_uid_str = arr[i].as_string();
 			std::string val_str = arr[i + 1].as_string();

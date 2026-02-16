@@ -38,3 +38,12 @@ public:
 	void set_name(const char str[], sf::Font& font);
 	void set_chat(const char str[], sf::Font& font);
 };
+
+// 필드 아이템 구조체
+struct MapItemInfo {
+	int object_id;
+	int template_id;
+	int count;
+	int x, y;
+	sf::Sprite sprite;
+};

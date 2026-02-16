@@ -1,4 +1,4 @@
-//#include "protocol.h"
+ï»¿//#include "protocol.h"
 #include "global.h"
 #include "OVER.h"
 #include "Session.h"
@@ -10,7 +10,7 @@
 SOCKET g_server_socket, g_client_socket;
 HANDLE g_h_iocp;
 OVER g_over;
-std::array<std::unique_ptr<SESSION>, MAX_NPC + MAX_USER> objects;
+std::array<std::unique_ptr<SESSION>, MAX_OBJECTS> objects;
 std::unordered_set<int> g_player_list;
 std::mutex g_mut_player_list;
 std::map <std::pair<int, int>, Sector> g_ObjectSector;
@@ -18,7 +18,7 @@ concurrency::concurrent_priority_queue<EVENT> g_event_queue;
 concurrency::concurrent_queue<DBRequest> g_db_request_queue;
 ObjectPool<OVER> g_sendPool(1000); // Send Pool
 
-// ½Ã¾ß°¡ Å¬¶óÀÌ¾ğÆ®¿¡ ¸ÂÃç »ç°¢ÇüÀÇ ÇüÅÂÀÌ´Ù
+// ì‹œì•¼ê°€ í´ë¼ì´ì–¸íŠ¸ì—ê²Œ ë³´ì¼ ì‚¬ê°í˜•ì— í¬í•¨ë˜ëŠ”ê°€
 bool CanSee(int a, int b)
 {
 	int dx = std::abs(objects[a]->x_ - objects[b]->x_);
@@ -32,7 +32,11 @@ bool IsNpc(int a)
 }
 bool IsPlayer(int a)
 {
-	return a >= MAX_NPC;
+	return a >= MAX_NPC && a < MAX_NPC + MAX_USER;
+}
+bool IsMapItem(int a)
+{
+	return a >= MAX_NPC + MAX_USER;
 }
 
 
@@ -116,11 +120,11 @@ void Worker()
 				CreateIoCompletionPort(reinterpret_cast<HANDLE>(g_client_socket),
 					g_h_iocp, client_id, 0);
 				objects[client_id]->DoReceive();
-				// Á¢¼Ó ÇÃ·¹ÀÌ¾î ¸®½ºÆ®¿¡ ÀúÀå
+				// ì ‘ì† í”Œë ˆì´ì–´ ë¦¬ìŠ¤íŠ¸ì— ì¶”ê°€
 				g_mut_player_list.lock();
 				g_player_list.insert(client_id);
 				g_mut_player_list.unlock();
-				// ´Ù¸¥ ÇÃ·¹ÀÌ¾î À§ÇØ ¼ÒÄÏ ÃÊ±âÈ­
+				// ë‹¤ë¥¸ í”Œë ˆì´ì–´ ì ‘ì† ì†Œì¼“ ì´ˆê¸°í™”
 				g_client_socket = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
 			}
 			else
@@ -143,7 +147,7 @@ void Worker()
 
 			while (buffer.size() > 0)
 			{
-				// Ã¹ 2¹ÙÀÌÆ®¸¦ ÅëÇØ ÆĞÅ¶ Å©±â °è»ê
+				// ì²« 2ë°”ì´íŠ¸ë¥¼ ì½ì–´ íŒ¨í‚· í¬ê¸° ê³„ì‚°
 				uint16_t packet_size = static_cast<uint16_t>(buffer[0]) |
 					(static_cast<uint16_t>(buffer[1]) << 8);
 				if (packet_size <= buffer.size())
@@ -167,7 +171,7 @@ void Worker()
 		}
 
 		//=======================================================
-		// AI Ã³¸®
+		// AI ì²˜ë¦¬
 		//=======================================================
 		case KEY_NPC_MOVE_TO_PLAYER:
 		case KEY_NPC_RANDOM_MOVE:
@@ -194,7 +198,10 @@ void disconnect(int c_id)
 			}
 			if (objects[id]->id_ == c_id) continue;
 			if (IsNpc(objects[id]->id_)) continue;
-			// ´«¿¡ º¸ÀÌ´Â ¾Öµé¿¡°Ô¸¸ º¸³¿
+			// ë§µ ì•„ì´í…œ ì œì™¸
+			if (IsMapItem(objects[id]->id_)) continue;
+
+			// ì ‘ì† ëŠê¸°ëŠ” ë†ˆë“¤ì—ê²Œë§Œ ì „ì†¡
 			if (false == CanSee(objects[id]->id_, c_id)) continue;
 			objects[id]->SendRemoveObjectPacket(c_id);
 		}
@@ -213,13 +220,13 @@ void disconnect(int c_id)
 	g_player_list.erase(c_id);
 	g_mut_player_list.unlock();
 	
-	// ¼½ÅÍ¿¡¼­ ·Î±×¾Æ¿ôÇÑ id »èÁ¦
+	// ì„¹í„°ì—ì„œ ë¡œê·¸ì•„ì›ƒí•œ id ì‚­ì œ
 	for (auto& sector : g_ObjectSector)
 	{
 		std::lock_guard<std::mutex> sec_l(sector.second.mut_sector_);
 		{
 			if (sector.second.sec_id_.find(c_id) != sector.second.sec_id_.end()) {
-				// ±âÁ¸ ¼½ÅÍ¿¡¼­ ÇÃ·¹ÀÌ¾î Á¤º¸¸¦ »èÁ¦
+				// í•´ë‹¹ ì„¹í„°ì—ì„œ í”Œë ˆì´ì–´ ì•„ì´ë”” ì‚­ì œ
 				sector.second.sec_id_.erase(c_id);
 				break;
 			}
@@ -227,12 +234,12 @@ void disconnect(int c_id)
 	}
 }
 
-// ¼­¹ö ÃÊ±âÈ­ ½Ã ¹İµå½Ã È£Ãâ
+// ë§µ ì´ˆê¸°í™” ì‹œ ë°˜ë“œì‹œ í˜¸ì¶œ
 void InitializeSectors() 
 {
 	for (int y = 0; y <= W_HEIGHT / SEC_COL; ++y) {
 		for (int x = 0; x <= W_WIDTH / SEC_ROW; ++x) {
-			// ¹Ì¸® »ı¼ºÇÏ¿© ¶ô °æÇÕ ¹× ¸Ê ±¸Á¶ º¯°æ ¹æÁö
+			// ë¯¸ë¦¬ ìƒì„±í•˜ì—¬ ë§µ ìƒì„± ì‹œ ë½ ë¬¸ì œ ë°©ì§€
 			g_ObjectSector[{x, y}];
 		}
 	}
@@ -273,24 +280,24 @@ void InitializeObjects()
 	std::cout << "===== Initialize NPC End =====" << std::endl;
 }
 
-// ¸Ş¸ğ¸®Ç® Á¤¸® ½º·¹µå
+// ë©”ëª¨ë¦¬í’€ ì •ë¦¬ ìŠ¤ë ˆë“œ
 void PoolManagerThread() 
 {
 	while (true) 
 	{
 		std::this_thread::sleep_for(std::chrono::seconds(10));
-		size_t newMax = g_player_list.size() * 20; // ÇÃ·¹ÀÌ¾î´ç 20°³ ÇÒ´ç
+		size_t newMax = g_player_list.size() * 20; // í”Œë ˆì´ì–´ë‹¹ 20ê°œ í• ë‹¹
 		g_sendPool.SetMaxSize(newMax);
 		g_sendPool.Trim();
 	}
 }
 
-// ·©Å· ¾÷µ¥ÀÌÆ®¸¦ ´ã´çÇÒ °ü¸® ½º·¹µå ÇÔ¼ö
+// ë­í‚¹ ì—…ë°ì´íŠ¸ë¥¼ ì£¼ê¸°ì  ì‹¤í–‰ ìŠ¤ë ˆë“œ í•¨ìˆ˜
 void RankingManagerThread()
 {
 	while (true)
 	{
-		// 10ÃÊ¸¶´Ù ·©Å· Ä³½Ã °»½Å
+		// 10ì´ˆë§ˆë‹¤ ë­í‚¹ ìºì‹œ ê°±ì‹ 
 		RankingManager::GetInstance()->UpdateRankingCache();
 		std::this_thread::sleep_for(std::chrono::seconds(10));
 	}
@@ -325,7 +332,7 @@ int main()
 	InitializeSectors();
 	InitializeObjects();
 
-	// redis ÃÊ±âÈ­
+	// redis ì´ˆê¸°í™”
 	g_redis_client = std::make_unique<cpp_redis::client>();
 	if (ConnectWithRedis() == false)
 	{
@@ -333,19 +340,19 @@ int main()
 		return 0; 
 	}
 
-	// DB ½º·¹µå »ı¼º
+	// DB ì—°ê²°ì ìƒì„±
 	SQLHDBC hdbc = ConnectWithDataBase();
 	RankingManager::GetInstance()->LoadAllRankingsFromSQL(hdbc);
 	
 	std::thread db_thread(DBWoker, hdbc);
-	//ai ½º·¹µå »ı¼º
+	//ai ìŠ¤ë ˆë“œ ì‹œì‘
 	std::thread ai_thread(DoAITimer);
-	// ¸Ş¸ğ¸®Ç® °ü¸® ½º·¹µå »ı¼º
+	// ë©”ëª¨ë¦¬í’€ ì •ë¦¬ ìŠ¤ë ˆë“œ ì‹œì‘
 	std::thread pool_manager_thread(PoolManagerThread);
-	// ·©Å· °»½Å ½º·¹µå »ı¼º
+	// ë­í‚¹ ê´€ë¦¬ ìŠ¤ë ˆë“œ ì‹œì‘
 	std::thread ranking_manager_thread(RankingManagerThread);
 
-	// cpu ÄÚ¾î °³¼ö¸¸Å­ woker ½º·¹µå »ç¿ë
+	// cpu ì½”ì–´ ê°œìˆ˜ë§Œí¼ woker ìŠ¤ë ˆë“œ ìƒì„±
 	for (int i = 0; i < num_threads; i++)
 	{
 		worker_threads.emplace_back(Worker);

@@ -1,6 +1,7 @@
 ﻿#pragma once
 #include <SFML/Graphics.hpp>
 #include <vector>
+#include <set> // set 헤더 추가
 #include <chrono>
 #include "Constants.h"
 #include "protocol.h"
@@ -39,6 +40,7 @@ private:
 	// 동기화 관련
 	bool isDirty_;
 	std::chrono::system_clock::time_point lastSyncTime_;
+	std::set<long long> dirtyItemUIDs_; // 변경된 아이템 UID 목록
 
 	// 상수
 	static constexpr int UI_X = 100;
@@ -65,6 +67,7 @@ public:
 
 	// 아이템 관리
 	void AddItem(long long uid, int tid, int cnt, int x, int y, bool rot);
+	void RemoveItem(long long uid); // 아이템 제거 함수 추가
 	ClientItem* FindItem(long long uid);
 	ClientItemTemplate GetItemTemplate(int tid);
 	bool CanPlace(int startX, int startY, int w, int h, long long excludeUID);

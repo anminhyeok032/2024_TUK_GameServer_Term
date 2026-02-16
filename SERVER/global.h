@@ -54,6 +54,8 @@ void print_error(const char* msg, int err_no);
 bool CanSee(int curr, int other);
 bool IsNpc(int a);
 bool IsPlayer(int a);
+bool IsMapItem(int a); // 맵 아이템인지 확인 (ID 범위로 판단)
+
 void disconnect(int c_id);
 
 

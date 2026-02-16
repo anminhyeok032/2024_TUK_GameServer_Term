@@ -85,4 +85,4 @@ public:
 	void PutInSector();
 };
 
-extern std::array<std::unique_ptr<SESSION>, MAX_NPC + MAX_USER> objects;
+extern std::array<std::unique_ptr<SESSION>, MAX_OBJECTS> objects;

@@ -47,6 +47,9 @@
     <ClCompile Include="Npc.cpp">
       <Filter>Game\Object</Filter>
     </ClCompile>
+    <ClCompile Include="MapItem.cpp">
+      <Filter>Game\Object</Filter>
+    </ClCompile>
     <ClCompile Include="RankingManager.cpp">
       <Filter>Game\System</Filter>
     </ClCompile>
@@ -77,6 +80,9 @@
       <Filter>Game\Object</Filter>
     </ClInclude>
     <ClInclude Include="Npc.h">
+      <Filter>Game\Object</Filter>
+    </ClInclude>
+    <ClInclude Include="MapItem.h">
       <Filter>Game\Object</Filter>
     </ClInclude>
     <ClInclude Include="Inventory.h">

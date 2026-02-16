@@ -3,6 +3,7 @@
 #include "InventoryUI.h"
 #include <iostream>
 #include <cmath>
+#include <algorithm> // for remove_if
 
 using namespace std;
 
@@ -175,6 +176,13 @@ void GameManager::HandleInput()
 				if (event.key.code == sf::Keyboard::I) {
 					g_inventoryUI.Toggle();
 				}
+				// G키로 아이템 줍기
+				if (event.key.code == sf::Keyboard::G) {
+					CS_ITEM_PICKUP_PACKET p;
+					p.size = sizeof(p);
+					p.type = CS_ITEM_PICKUP;
+					SendPacket(&p);
+				}
 				if (event.key.code == sf::Keyboard::P) {
 					isRankingActive_ = !isRankingActive_;
 					if (isRankingActive_) {
@@ -192,7 +200,7 @@ void GameManager::HandleInput()
 				if (event.key.code == sf::Keyboard::Up) dir = 0;
 				if (event.key.code == sf::Keyboard::Down) dir = 1;
 				if (dir != -1) {
-					lastDirection_ = dir; // [Add] 이동 방향 저장
+					lastDirection_ = dir; // 이동 방향 저장
 					CS_MOVE_PACKET p; p.size = sizeof(p); p.type = CS_MOVE; p.direction = dir;
 					SendPacket(&p);
 				}
@@ -205,9 +213,9 @@ void GameManager::HandleInput()
 					CS_ATTACK_PACKET p; 
 					p.size = sizeof(p); 
 					p.type = CS_ATTACK; 
-					p.attack_type = (char)attack_type; // [Add] 공격 타입 설정
+					p.attack_type = (char)attack_type; 
 					
-					if (attack_type == 0) p.attack_direction = lastDirection_;
+					if (attack_type == 0) p.attack_direction = lastDirection_; // 저장된 방향
 					else p.attack_direction = 4; // 범위
 
 					SendPacket(&p);
@@ -222,7 +230,7 @@ void GameManager::HandleInput()
 					SendPacket(&p);
 					avatar_.set_chat(p.mess, font_);
 					
-					// [복구] 내 채팅도 히스토리에 추가
+					// 내 채팅도 히스토리에 추가
 					string msg = "[" + string(avatar_.name) + "] : " + p.mess;
 					chatHistory_.push_back(msg);
 					if (chatHistory_.size() > 5) chatHistory_.erase(chatHistory_.begin());
@@ -307,7 +315,7 @@ void GameManager::ProcessPacket(char* ptr)
 		else players_[p->id].set_chat(p->mess, font_);
 		
 		string msg = "[" + string(players_[p->id].name) + "] : " + p->mess;
-		// [복구] 내 채팅은 Enter 키 입력 시 이미 추가했으므로 중복 추가 방지
+		// 내 채팅은 Enter 키 입력 시 이미 추가했으므로 중복 추가 방지
 		if (p->id != myId_) {
 			chatHistory_.push_back(msg);
 			if (chatHistory_.size() > 5) chatHistory_.erase(chatHistory_.begin());
@@ -319,17 +327,18 @@ void GameManager::ProcessPacket(char* ptr)
 		avatar_.hp = p->hp; avatar_.max_hp = p->max_hp;
 		avatar_.exp = p->exp; avatar_.level = p->level;
 		hpBar_.setSize(sf::Vector2f(((float)avatar_.hp / avatar_.max_hp) * 200, 30));
-		expBar_.setSize(sf::Vector2f(static_cast<float>((double)avatar_.exp / (100 * pow(2, avatar_.level - 1))) * 200, 10)); // [Mod] double->float 형변환 경고 해결
+		expBar_.setSize(sf::Vector2f(static_cast<float>((double)avatar_.exp / (100 * pow(2, avatar_.level - 1))) * 200, 10)); // warning C4244 해결
 		levelText_.setString("Level : " + to_string(avatar_.level));
 		break;
 	}
+	// 공격 처리 및 시각화
 	case SC_ATTACK: {
 		SC_ATTACK_PACKET* p = reinterpret_cast<SC_ATTACK_PACKET*>(ptr);
 		string msg;
 		int damage = 0;
 		if (players_.count(p->damaged_id)) damage = players_[p->damaged_id].hp - p->hp;
 
-		// [Add] 공격 이펙트 생성
+		// 공격 이펙트 생성
 		auto now = chrono::system_clock::now();
 		if (p->attack_type == 0) { // 평타
 			int tx = p->center_x;
@@ -385,6 +394,36 @@ void GameManager::ProcessPacket(char* ptr)
 		for (int i = 0; i < p->count; ++i) {
 			rankingData_.push_back({ p->ranks[i].name, p->ranks[i].rank, p->ranks[i].level });
 		}
+		break;
+	}
+	// 필드 아이템 생성 알림
+	case SC_ADD_MAP_ITEM: {
+		SC_ADD_MAP_ITEM_PACKET* p = reinterpret_cast<SC_ADD_MAP_ITEM_PACKET*>(ptr);
+		MapItemInfo info;
+		info.object_id = p->object_id;
+		info.template_id = p->template_id;
+		info.count = p->count;
+		info.x = p->x;
+		info.y = p->y;
+		// 템플릿 ID에 따른 스프라이트 설정 (일단 체스말로 임시 사용)
+		info.sprite.setTexture(*pieceTex_);
+		info.sprite.setTextureRect(sf::IntRect(0, 0, 64, 64)); // 임시
+		info.sprite.setScale(0.3f, 0.3f); // 좀 작게
+		mapItems_[p->object_id] = info;
+		break;
+	}
+	// 필드 아이템 삭제 알림
+	case SC_REMOVE_MAP_ITEM: {
+		SC_REMOVE_MAP_ITEM_PACKET* p = reinterpret_cast<SC_REMOVE_MAP_ITEM_PACKET*>(ptr);
+		mapItems_.erase(p->object_id);
+		break;
+	}
+	// 아이템 획득 (인벤토리 추가)
+	case SC_GET_ITEM: {
+		// 현재 서버가 이 패킷을 안 보내고(InventoryUI에서 관리), 
+		// 클라가 알아서 추가하는 구조라면 필요 없음.
+		// 하지만 서버가 "너 이거 먹었어" 하고 알려주는 게 확실함.
+		// 일단 비워둠.
 		break;
 	}
 	}
@@ -447,7 +486,7 @@ void GameManager::Draw()
 		}
 	}
 
-	// [Add] 공격 이펙트 그리기
+	// 공격 이펙트 그리기
 	auto now = chrono::system_clock::now();
 	sf::RectangleShape effectRect(sf::Vector2f(TILE_WIDTH, TILE_WIDTH));
 	effectRect.setFillColor(sf::Color(255, 0, 0, 128)); // 반투명 빨강
@@ -464,6 +503,15 @@ void GameManager::Draw()
 		float ey = (float)((ef.y - topY_) * TILE_WIDTH);
 		effectRect.setPosition(ex, ey);
 		window_->draw(effectRect);
+	}
+
+	// 맵 아이템 그리기
+	for (auto& pair : mapItems_) {
+		auto& item = pair.second;
+		float ix = (float)((item.x - leftX_) * TILE_WIDTH + 10); // 약간 오프셋
+		float iy = (float)((item.y - topY_) * TILE_WIDTH + 10);
+		item.sprite.setPosition(ix, iy);
+		window_->draw(item.sprite);
 	}
 
 	avatar_.draw(window_, leftX_, topY_);

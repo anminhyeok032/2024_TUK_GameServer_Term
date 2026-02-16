@@ -81,28 +81,44 @@ void InventoryUI::AddItem(long long uid, int tid, int cnt, int x, int y, bool ro
 	item.x = x;
 	item.y = y;
 	item.is_rotated = rot;
-	// item.sprite 설정은 나중에 텍스처 로드 후
 	myItems_.push_back(item);
+}
+
+void InventoryUI::RemoveItem(long long uid)
+{
+	for (auto it = myItems_.begin(); it != myItems_.end(); ++it)
+	{
+		if (it->item_uid == uid) 
+		{
+			myItems_.erase(it);
+			break;
+		}
+	}
 }
 
 void InventoryUI::SyncToServer()
 {
-	if (!isDirty_) return;
+	if (!isDirty_ || dirtyItemUIDs_.empty()) return;
 
-	//std::cout << "[Sync] Inventory syncing to server..." << std::endl;
+	//std::cout << "[Sync] Syncing " << dirtyItemUIDs_.size() << " changed items to server..." << std::endl;
 
-	for (const auto& item : myItems_) {
+	// 변경된 아이템만 골라서 패킷 전송
+	for (long long uid : dirtyItemUIDs_) {
+		ClientItem* item = FindItem(uid);
+		if (!item) continue;
+
 		CS_ITEM_MOVE_PACKET p;
 		p.size = sizeof(p);
 		p.type = CS_ITEM_MOVE;
-		p.item_uid = item.item_uid;
-		p.new_x = item.x;
-		p.new_y = item.y;
-		p.is_rotated = item.is_rotated;
+		p.item_uid = item->item_uid;
+		p.new_x = item->x;
+		p.new_y = item->y;
+		p.is_rotated = item->is_rotated;
 		send_packet(&p);
 	}
 
 	isDirty_ = false;
+	dirtyItemUIDs_.clear(); // 목록 초기화
 	lastSyncTime_ = std::chrono::system_clock::now();
 }
 
@@ -157,13 +173,34 @@ void InventoryUI::HandleInput(sf::Event& event)
 				int w = item->is_rotated ? info.h : info.w;
 				int h = item->is_rotated ? info.w : info.h;
 
+				// 인벤토리 영역 내에 있는지 검사
 				if (CanPlace(gridX, gridY, w, h, item->item_uid)) {
 					item->x = gridX;
 					item->y = gridY;
 					isDirty_ = true;
+					dirtyItemUIDs_.insert(item->item_uid); // [Add] 변경된 아이템 UID 등록
 				}
 				else {
-					std::cout << "Can't place item there!" << std::endl;
+					// 인벤토리 영역 밖으로 드롭 -> 아이템 버리기
+					sf::FloatRect invRect((float)UI_X, (float)UI_Y, 
+						(float)(INV_MAX_COL * SLOT_SIZE + 20), (float)(INV_MAX_ROW * SLOT_SIZE + 40));
+					
+					if (!invRect.contains((float)mousePos.x, (float)mousePos.y)) {
+						// 버리기 패킷 전송
+						CS_ITEM_DROP_PACKET p;
+						p.size = sizeof(p);
+						p.type = CS_ITEM_DROP;
+						p.item_uid = draggingItemUID_;
+						send_packet(&p);
+
+						// 클라이언트 인벤토리에서 즉시 제거
+						RemoveItem(draggingItemUID_);
+						// 버리기는 Dirty Sync 대상이 아니므로 즉시 처리됨
+					}
+					else {
+						// 인벤토리 내인데 공간이 없어서 못 놓는 경우 (원래 자리로)
+						//std::cout << "Can't place item there!" << std::endl;
+					}
 				}
 			}
 			isDragging_ = false;
@@ -189,6 +226,7 @@ void InventoryUI::HandleInput(sf::Event& event)
 					if (CanPlace(item.x, item.y, nextW, nextH, item.item_uid)) {
 						item.is_rotated = nextRotated;
 						isDirty_ = true;
+						dirtyItemUIDs_.insert(item.item_uid); // [Add] 변경된 아이템 UID 등록
 					}
 					break;
 				}

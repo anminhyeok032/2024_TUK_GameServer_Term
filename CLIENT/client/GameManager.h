@@ -8,7 +8,7 @@
 #include "Constants.h"
 
 // [Game Manager]
-// 클라이언트의 메인 로직, 렌더링 루프, 네트워크 연결 등을 총괄합니다.
+// 클라이언트의 메인 로직, 렌더링 루프, 네트워크 연결 등을 총괄
 
 struct ClientRankInfo {
 	std::string name;
@@ -28,12 +28,18 @@ public:
 	int myId_;
 	int leftX_, topY_; // 카메라 오프셋
 
-	// [Add] 공격 이펙트 구조체 및 리스트
+	// 공격 이펙트 구조체 및 리스트
 	struct AttackEffect {
 		int x, y; // 타일 좌표
 		std::chrono::system_clock::time_point startTime; // 생성 시간
 	};
 	std::vector<AttackEffect> attackEffects_;
+
+	// 마지막 이동 방향 저장 (공격용)
+	int lastDirection_ = 1; // 0:UP, 1:DOWN, 2:LEFT, 3:RIGHT (기본값 DOWN)
+
+	// 맵 아이템 맵 (Key: object_id)
+	std::unordered_map<int, MapItemInfo> mapItems_;
 
 	// 게임 객체들
 	OBJECT avatar_;
@@ -64,9 +70,6 @@ public:
 	bool isRankingActive_;
 	int rankingScrollIndex_;
 	std::vector<ClientRankInfo> rankingData_;
-
-	// 마지막 이동 방향 저장 (공격용)
-	int lastDirection_ = 1; // 0:UP, 1:DOWN, 2:LEFT, 3:RIGHT (기본값 DOWN)
 
 public:
 	GameManager();

@@ -12,6 +12,8 @@ constexpr int CHAT_SIZE = 300;
 // 최대 동시 접속자 및 NPC 수
 constexpr int MAX_USER = 20000;
 constexpr int MAX_NPC = 200000;
+constexpr int MAX_MAP_ITEM = 10000; // 필드 아이템 최대 개수
+constexpr int MAX_OBJECTS = MAX_NPC + MAX_USER + MAX_MAP_ITEM;
 
 // 맵 크기
 constexpr int W_WIDTH = 2000;

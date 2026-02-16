@@ -10,6 +10,8 @@ constexpr char CS_TELEPORT = 4;			// RANDOM한 위치로 Teleport, Stress Test�
 constexpr char CS_LOGOUT = 5;			// 클라이언트에서 정상적으로 종료를 알리는 패킷
 constexpr char CS_RANKING_REQ = 6;
 constexpr char CS_ITEM_MOVE = 7;		// 아이템 이동 요청
+constexpr char CS_ITEM_DROP = 8;        // 아이템 버리기 요청
+constexpr char CS_ITEM_PICKUP = 9;      // 아이템 줍기 요청
 
 constexpr char SC_LOGIN_INFO = 2;
 constexpr char SC_LOGIN_FAIL = 3;
@@ -21,6 +23,9 @@ constexpr char SC_STAT_CHANGE = 8;
 constexpr char SC_ATTACK = 9;			// 공격 표시는 별도 추가
 constexpr char SC_RANKING = 10;
 constexpr char SC_ITEM_MOVE_RESULT = 11; // 아이템 이동 결과
+constexpr char SC_ADD_MAP_ITEM = 12;     // 필드 아이템 생성 알림
+constexpr char SC_REMOVE_MAP_ITEM = 13;  // 필드 아이템 삭제 알림
+constexpr char SC_GET_ITEM = 14;         // 아이템 획득 알림 (인벤토리 추가)
 
 #pragma pack (push, 1)
 
@@ -64,17 +69,17 @@ struct CS_LOGOUT_PACKET {
 struct CS_ATTACK_PACKET {
 	unsigned short size;
 	char	type;
-	char	attack_type;	//  0: 평타, 1: 범위
+	char	attack_type;	// 0: 평타, 1: 범위공격
 	char	attack_direction;  // 0 : UP, 1 : DOWN, 2 : LEFT, 3 : RIGHT, 4 : 4방향
 };
 
-// [Client -> Server] 랭킹 요청 패킷
+// 랭킹 요청 패킷
 struct CS_RANKING_REQ_PACKET {
 	unsigned short size;
 	char type;
 };
 
-// [Add] 아이템 이동 요청 패킷
+// 아이템 이동 요청 패킷
 struct CS_ITEM_MOVE_PACKET {
 	unsigned short size;
 	char type;
@@ -82,6 +87,19 @@ struct CS_ITEM_MOVE_PACKET {
 	short new_x;		// 목표 인벤토리 x 좌표
 	short new_y;		// 목표 인벤토리 y 좌표
 	bool is_rotated;	// 회전 여부
+};
+
+// 아이템 버리기 패킷
+struct CS_ITEM_DROP_PACKET {
+	unsigned short size;
+	char type;
+	long long item_uid; // 버릴 아이템 UID
+};
+
+// 아이템 줍기 패킷
+struct CS_ITEM_PICKUP_PACKET {
+	unsigned short size;
+	char type;
 };
 
 struct SC_LOGIN_INFO_PACKET {
@@ -150,7 +168,7 @@ struct SC_ATTACK_PACKET {
 	int		hp;
 	int     exp;
 	
-	// [Add] 공격 시각화를 위한 정보
+	// 공격 시각화를 위한 정보
 	char	attack_type;	// 0: 평타, 1: 범위공격
 	char	direction;		// 평타일 때 방향 (0:UP, 1:DOWN, 2:LEFT, 3:RIGHT)
 	short	center_x;		// 공격자 위치 (이펙트 기준점)
@@ -173,6 +191,35 @@ struct SC_ITEM_MOVE_RESULT_PACKET {
 	bool success;		// 성공 여부
 	short x;			// 최종 확정된 x (실패 시 원래 위치)
 	short y;			// 최종 확정된 y
+	bool is_rotated;
+};
+
+// 필드 아이템 생성 알림
+struct SC_ADD_MAP_ITEM_PACKET {
+	unsigned short size;
+	char type;
+	int object_id;    // 맵상의 오브젝트 ID (Player/NPC ID와 겹치지 않게 관리 필요)
+	long long item_uid; // 실제 아이템 데이터 ID
+	int template_id;
+	int count;
+	short x, y;
+};
+
+// 필드 아이템 삭제 알림
+struct SC_REMOVE_MAP_ITEM_PACKET {
+	unsigned short size;
+	char type;
+	int object_id;
+};
+
+// 아이템 획득 알림
+struct SC_GET_ITEM_PACKET {
+	unsigned short size;
+	char type;
+	long long item_uid;
+	int template_id;
+	int count;
+	short x, y; // 인벤토리 어느 칸에 들어왔는지
 	bool is_rotated;
 };
 
