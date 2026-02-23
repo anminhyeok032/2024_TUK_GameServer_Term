@@ -651,70 +651,79 @@ void Player::ProcessPacket(char* packet)
 			}
 			}
 			
+			std::vector<int> dead_npc_ids; // 사망한 NPC ID 수집용
+
 			// 공격 적용
 			for(const auto& coord : attack_coord)
 			{
 				// 공격 위치에 맞는 섹터를 얻어서 검사함
 				std::pair<int, int> sector_key = { coord.first / SEC_ROW, coord.second / SEC_COL };
 				auto& sector = g_ObjectSector[sector_key];
-				std::lock_guard<std::mutex> lock(sector.mut_sector_);
-				for (auto& id : sector.sec_id_)
 				{
-					if (id == id_) continue;
-					if (true == IsPlayer(id)) continue;
-
+					std::lock_guard<std::mutex> lock(sector.mut_sector_);
+					for (auto& id : sector.sec_id_)
 					{
-						std::lock_guard<std::mutex> ll(objects[id]->mut_state_);
-						if (OS_INGAME != objects[id]->state_) continue;
+						if (id == id_) continue;
+						if (true == IsPlayer(id)) continue;
+
+						{
+							std::lock_guard<std::mutex> ll(objects[id]->mut_state_);
+							if (OS_INGAME != objects[id]->state_) continue;
+						}
+
+						if (objects[id]->x_ == coord.first && objects[id]->y_ == coord.second)
+						{
+							// 공격 성공
+							objects[id]->hp_ -= damage;
+
+							if (objects[id]->hp_ <= 0)
+							{
+								// 사망
+								objects[id]->hp_ = 0;
+								objects[id]->state_ = OS_DEAD;
+
+								// NPC라면 아이템 드롭 시도
+								dead_npc_ids.push_back(id);
+
+								int getting_exp = objects[id]->level_ * objects[id]->level_ * 2;
+								exp_ += getting_exp;
+								int required_exp = static_cast<int>(100 * pow(2, level_ - 1));
+								if (exp_ >= required_exp)
+								{
+									level_++;
+									exp_ -= required_exp;
+									std::cout << "Level up - " << level_ << "!" << std::endl;
+									g_db_request_queue.push({ DBRequest::SAVE_REDIS, id_ });
+								}
+								SendStatChangePacket();  // 공격자 경험치/레벨 갱신
+
+								// 사망 패킷 + 제거 처리
+								for (auto& view_list : objects[id]->view_list_)
+								{
+									objects[view_list]->SendAttackPacket(id_, objects[id]->id_, getting_exp, p->attack_type, p->attack_direction);
+									objects[view_list]->SendRemoveObjectPacket(id);
+								}
+							}
+							else
+							{
+								// 피격 객체 생존시 데미지 패킷만 전송
+								for (auto& view_list : objects[id]->view_list_)
+								{
+									objects[view_list]->SendAttackPacket(id_, objects[id]->id_, 0, p->attack_type, p->attack_direction);
+								}
+							}
+
+						}
 					}
+				}
 
-					if (objects[id]->x_ == coord.first && objects[id]->y_ == coord.second)
+				// 섹터 락 해제 후 아이템 드롭 처리
+				for (int npc_id : dead_npc_ids)
+				{
+					if (true == IsNpc(npc_id))
 					{
-						// 공격 성공
-						objects[id]->hp_ -= damage;
-						//objects[id]->SendStatChangePacket();
-
-						if (objects[id]->hp_ <= 0)
-						{
-							// 사망
-							objects[id]->hp_ = 0;
-							objects[id]->state_ = OS_DEAD;
-
-							// NPC라면 아이템 드롭 시도
-							if (true == IsNpc(id))
-							{
-								Npc* npc = dynamic_cast<Npc*>(objects[id].get());
-								if (npc) npc->DropItem();
-							}
-
-							int getting_exp = objects[id]->level_ * objects[id]->level_ * 2;
-							exp_ += getting_exp;
-							int required_exp = static_cast<int>(100 * pow(2, level_ - 1));
-							if (exp_ >= required_exp)
-							{
-								level_++;
-								exp_ -= required_exp;
-								std::cout << "Level up - " << level_ << "!" << std::endl;
-								g_db_request_queue.push({ DBRequest::SAVE_REDIS, id_ });
-							}
-							SendStatChangePacket();  // 공격자 경험치/레벨 갱신
-
-							// 사망 패킷 + 제거 처리
-							for (auto& view_list : objects[id]->view_list_)
-							{
-								objects[view_list]->SendAttackPacket(id_, objects[id]->id_, getting_exp, p->attack_type, p->attack_direction);
-								objects[view_list]->SendRemoveObjectPacket(id);
-							}
-						}
-						else
-						{
-							// 피격 객체 생존시 데미지 패킷만 전송
-							for (auto& view_list : objects[id]->view_list_)
-							{
-								objects[view_list]->SendAttackPacket(id_, objects[id]->id_, 0, p->attack_type, p->attack_direction);
-							}
-						}
-							
+						Npc* npc = dynamic_cast<Npc*>(objects[npc_id].get());
+						if (npc) npc->DropItem();
 					}
 				}
 			}
