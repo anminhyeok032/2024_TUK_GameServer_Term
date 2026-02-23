@@ -1,10 +1,10 @@
-#include "Session.h"
+ï»¿#include "Session.h"
 
 void SESSION::PutInSector()
 {
 	std::pair<int, int> new_sector = { x_ / SEC_ROW, y_ / SEC_COL };
 
-	// around_sector_¿¡ ÁÖº¯ ¼½ÅÍ Á¤º¸ ÀúÀå
+	// around_sector_ì— ì£¼ë³€ ì„¹í„° ì •ë³´ ì €ì¥
 	around_sector_.clear();
 	around_sector_.insert(new_sector);
 	std::vector<std::pair<int, int>> offsets = 
@@ -18,17 +18,17 @@ void SESSION::PutInSector()
 	}
 
 
-	// ±âÁ¸ ¼½ÅÍ¿Í µ¿ÀÏÇÑÁö °Ë»ç
+	// ê¸°ì¡´ ì„¹í„°ì™€ ë™ì¼í•œì§€ ê²€ì‚¬
 	if (current_sector_ == new_sector) 
 	{
-		return; // °°´Ù¸é ¾Æ¹«°Íµµ ÇÏÁö ¾Ê°í ¹İÈ¯
+		return; // ê°™ë‹¤ë©´ ì•„ë¬´ê²ƒë„ í•˜ì§€ ì•Šê³  ë°˜í™˜
 	}
 
 	current_sector_ = new_sector;
 	for (auto& sector : g_ObjectSector)
 	{
 		if (sector.second.sec_id_.find(id_) != sector.second.sec_id_.end()) {
-			// ±âÁ¸ ¼½ÅÍ¿¡¼­ ÇÃ·¹ÀÌ¾î Á¤º¸¸¦ »èÁ¦
+			// ê¸°ì¡´ ì„¹í„°ì—ì„œ í”Œë ˆì´ì–´ ì •ë³´ë¥¼ ì‚­ì œ
 			sector.second.mut_sector_.lock();
 			sector.second.sec_id_.erase(id_);
 			sector.second.mut_sector_.unlock();
@@ -36,7 +36,7 @@ void SESSION::PutInSector()
 		}
 	}
 
-	// ÇöÀç sector¿¡ _id ÀúÀå
+	// í˜„ì¬ sectorì— _id ì €ì¥
 	g_ObjectSector[new_sector].mut_sector_.lock();
 	g_ObjectSector[new_sector].sec_id_.insert(id_);
 	g_ObjectSector[new_sector].mut_sector_.unlock();

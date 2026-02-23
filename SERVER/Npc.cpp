@@ -1,34 +1,37 @@
-#include "Npc.h"
+ï»¿#include "Npc.h"
+#include "protocol.h"
+#include "Player.h"
+#include "MapItem.h" // ë§µ ì•„ì´í…œ ì¶”ê°€ë¥¼ ìœ„í•´ í—¤ë” í¬í•¨
 
 void Npc::DoMove(int target_id)
 {
-	// Å¸ÀÔ¿¡ µû¶ó ´Ù¸¥ AI ·ÎÁ÷ ¼öÇà
+	// íƒ€ì…ì— ë”°ë¼ ë‹¤ë¥¸ AI ë¡œì§ ìˆ˜í–‰
 	switch (visual_)
 	{
-	case 1: // [Agro] ÃßÀûÇü NPC
+	case 1: // [Agro] ì¶”ì í˜• NPC
 	{
 		int final_target = target_id;
 
-		// ÇöÀç Å¸°ÙÀÌ À¯È¿ÇÑÁö °ËÁõ
+		// í˜„ì¬ íƒ€ê²Ÿì´ ìœ íš¨í•œì§€ ê²€ì¦
 		if (false == IsValidTarget(final_target))
 		{
-			// Å¸°ÙÀÌ ¾ø°Å³ª »ç¶óÁ³´Ù¸é, ÁÖº¯¿¡¼­ »õ·Î¿î Å¸°ÙÀ» Ã£À½ (¾î±×·Î º¯°æ)
+			// íƒ€ê²Ÿì´ ì—†ê±°ë‚˜ ì‚¬ë¼ì¡Œë‹¤ë©´, ì£¼ë³€ì—ì„œ ìƒˆë¡œìš´ íƒ€ê²Ÿì„ ì°¾ìŒ (ì–´ê·¸ë¡œ ë³€ê²½)
 			final_target = GetNearestPlayerId();
 		}
-		// ±×·¡µµ Å¸°ÙÀÌ ¾øÀ¸¸é ´Ù½Ã Àáµê (Sleep)
+		// ê·¸ë˜ë„ íƒ€ê²Ÿì´ ì—†ìœ¼ë©´ ë‹¤ì‹œ ì ë“¦ (Sleep)
 		if (final_target == -1)
 		{
 			active_ = false;
 			return;
 		}
 
-		// Lua ½ºÅ©¸³Æ® ½ÇÇà (ÀÌµ¿ ¹æÇâ °áÁ¤ µî)
+		// Lua ìŠ¤í¬ë¦½íŠ¸ ì‹¤í–‰ (ì´ë™ ë°©í–¥ ê²°ì • ë“±)
 		{
 			std::lock_guard<std::mutex> ml{ mut_lua_ };
 			if (L_ == nullptr) SetAiLua();
 
 			lua_getglobal(L_, "event_player_search");
-			lua_pushnumber(L_, final_target); // °ËÁõµÈ Å¸°Ù ID Àü´Ş
+			lua_pushnumber(L_, final_target); // ê²€ì¦ëœ íƒ€ê²Ÿ ID ì „ë‹¬
 
 			if (lua_pcall(L_, 1, 0, 0) != LUA_OK) {
 				std::cout << "Lua Error: " << lua_tostring(L_, -1) << std::endl;
@@ -36,27 +39,27 @@ void Npc::DoMove(int target_id)
 			}
 		}
 
-		// ´ÙÀ½ Çàµ¿ ¿¹¾à
+		// ë‹¤ìŒ í–‰ë™ ì˜ˆì•½
 		AddTimer(id_, EV_MOVE_TO_PLAYER, 1000, final_target);
 		break;
 	}
-	case 2: // [Peace] ¹èÈ¸Çü NPC
+	case 2: // [Peace] ë°°íšŒí˜• NPC
 	{
-		// 0~3 ³­¼ö »ı¼º (»óÇÏÁÂ¿ì)
+		// 0~3 ë‚œìˆ˜ ìƒì„± (ìƒí•˜ì¢Œìš°)
 		int dir = rand() % 4;
 
-		// ÀÌµ¿ ÇÔ¼ö Á÷Á¢ È£Ãâ
+		// ì´ë™ í•¨ìˆ˜ ì§ì ‘ í˜¸ì¶œ
 		Move(dir);
 
-		// ÁÖº¯¿¡ ÇÃ·¹ÀÌ¾î°¡ ÀÖ´ÂÁö È®ÀÎ ÈÄ °è¼Ó ¿òÁ÷ÀÏÁö °áÁ¤ (Sleep ·ÎÁ÷)
-		// peace´Â 2ÃÊ¿¡ ÇÑ¹ø ¿òÁ÷ÀÌ°Ô ¼³Á¤
-		if (true == IsPlayerExist()) // ÁÖº¯¿¡ ´©±º°¡ ÀÖ¾î¾ß ¿òÁ÷ÀÓ
+		// ì£¼ë³€ì— í”Œë ˆì´ì–´ê°€ ìˆëŠ”ì§€ í™•ì¸ í›„ ê³„ì† ì›€ì§ì¼ì§€ ê²°ì • (Sleep ë¡œì§)
+		// peaceëŠ” 2ì´ˆì— í•œë²ˆ ì›€ì§ì´ê²Œ ì„¤ì •
+		if (true == IsPlayerExist()) // ì£¼ë³€ì— ëˆ„êµ°ê°€ ìˆì–´ì•¼ ì›€ì§ì„
 		{
 			AddTimer(id_, EV_NPC_RANDOM_MOVE, 2000, 0);
 		}
 		else
 		{
-			active_ = false; // ÁÖº¯¿¡ ¾Æ¹«µµ ¾øÀ¸¸é Sleep
+			active_ = false; // ì£¼ë³€ì— ì•„ë¬´ë„ ì—†ìœ¼ë©´ Sleep
 		}
 		break;
 	}
@@ -69,7 +72,7 @@ void Npc::Move(int dir)
 	short dx = 0;
 	short dy = 0;
 
-	// ¹æÇâ¿¡ µû¸¥ ÁÂÇ¥ º¯È­·® (0:»ó, 1:ÇÏ, 2:ÁÂ, 3:¿ì)
+	// ë°©í–¥ì— ë”°ë¥¸ ì¢Œí‘œ ë³€í™”ëŸ‰ (0:ìƒ, 1:í•˜, 2:ì¢Œ, 3:ìš°)
 	switch (dir) {
 	case 0: dy = -1; break;
 	case 1: dy = 1;  break;
@@ -80,30 +83,30 @@ void Npc::Move(int dir)
 	short new_x = x_ + dx;
 	short new_y = y_ + dy;
 
-	// ¸Ê ¹üÀ§ Ã¼Å©
+	// ë§µ ë²”ìœ„ ì²´í¬
 	if (new_x < 0 || new_x >= W_WIDTH || new_y < 0 || new_y >= W_HEIGHT)
 		return;
 
-	// ÁÂÇ¥ °»½Å
+	// ì¢Œí‘œ ê°±ì‹ 
 	x_ = new_x;
 	y_ = new_y;
 
-	// ¼½ÅÍ °»½Å (¼½ÅÍ°¡ ¹Ù²î¾úÀ¸¸é ÀÌµ¿ Ã³¸®)
+	// ì„¹í„° ê°±ì‹  (ì„¹í„°ê°€ ë°”ë€Œì—ˆìœ¼ë©´ ì´ë™ ì²˜ë¦¬)
 	PutInSector();
 
-	// ÁÖº¯ ÇÃ·¹ÀÌ¾î¿¡°Ô ÀÌµ¿ ÆĞÅ¶ Àü¼Û (Broadcasting)
-	// ³» ÁÖº¯ ¼½ÅÍ¸¦ µÚÁ®¼­ ÇÃ·¹ÀÌ¾î¸¦ Ã£À½
+	// ì£¼ë³€ í”Œë ˆì´ì–´ì—ê²Œ ì´ë™ íŒ¨í‚· ì „ì†¡ (Broadcasting)
+	// ë‚´ ì£¼ë³€ ì„¹í„°ë¥¼ ë’¤ì ¸ì„œ í”Œë ˆì´ì–´ë¥¼ ì°¾ìŒ
 	for (auto& sector : around_sector_)
 	{
 		std::lock_guard<std::mutex> sec_l(g_ObjectSector[sector].mut_sector_);
 		for (auto& p_id : g_ObjectSector[sector].sec_id_)
 		{
-			// ÇÃ·¹ÀÌ¾î°¡ ¾Æ´Ï¸é ½ºÅµ
+			// í”Œë ˆì´ì–´ê°€ ì•„ë‹ˆë©´ ìŠ¤í‚µ
 			if (false == IsPlayer(p_id)) continue;
 
-			// ½Ã¾ß ³»¿¡ ÀÖ´Â ÇÃ·¹ÀÌ¾î¿¡°Ô¸¸ Àü¼Û
+			// ì‹œì•¼ ë‚´ì— ìˆëŠ” í”Œë ˆì´ì–´ì—ê²Œë§Œ ì „ì†¡
 			if (CanSee(id_, p_id)) {
-				// ÇØ´ç ÇÃ·¹ÀÌ¾î¿¡°Ô NPC(³ª)°¡ ÀÌµ¿Çß´Ù´Â ÆĞÅ¶À» º¸³¿
+				// í•´ë‹¹ í”Œë ˆì´ì–´ì—ê²Œ NPC(ë‚˜)ê°€ ì´ë™í–ˆë‹¤ëŠ” íŒ¨í‚·ì„ ë³´ëƒ„
 				objects[p_id]->SendMovePacket(id_);
 			}
 		}
@@ -112,9 +115,9 @@ void Npc::Move(int dir)
 
 void Npc::SendAddObjectPacket(int c_id)
 {
-	// NPC´Â ºä¸®½ºÆ®¸¦ °ü¸®ÇÏÁö ¾ÊÁö¸¸(NPC³¢¸® Åë½Å X),
-	// ÀÎÅÍÆäÀÌ½º ÅëÀÏ¼ºÀ» À§ÇØ ±¸ÇöÇÏ°Å³ª ºñ¿öµÒ.
-	// ¸¸¾à NPC°¡ ¾î±×·Î ´ë»óÀ» ±â¾ïÇØ¾ß ÇÑ´Ù¸é ¿©±â¼­ Ã³¸®.
+	// NPCëŠ” ë·°ë¦¬ìŠ¤íŠ¸ë¥¼ ê´€ë¦¬í•˜ì§€ ì•Šì§€ë§Œ(NPCë¼ë¦¬ í†µì‹  X),
+	// ì¸í„°í˜ì´ìŠ¤ í†µì¼ì„±ì„ ìœ„í•´ êµ¬í˜„í•˜ê±°ë‚˜ ë¹„ì›Œë‘ .
+	// ë§Œì•½ NPCê°€ ì–´ê·¸ë¡œ ëŒ€ìƒì„ ê¸°ì–µí•´ì•¼ í•œë‹¤ë©´ ì—¬ê¸°ì„œ ì²˜ë¦¬.
 	mut_view_.lock();
 	view_list_.insert(c_id);
 	mut_view_.unlock();
@@ -145,7 +148,7 @@ bool Npc::IsPlayerExist()
 	for (auto& sector : around_sector_)
 	{
 		{
-			// ¼½ÅÍ¿¡ ´ëÇÑ lock
+			// ì„¹í„°ì— ëŒ€í•œ lock
 			std::lock_guard<std::mutex> sec_l(g_ObjectSector[sector].mut_sector_);
 			for (auto& id : g_ObjectSector[sector].sec_id_)
 			{
@@ -164,7 +167,7 @@ void Npc::WakeUpNpc(int p_id)
 	{
 		SetAiLua();
 	}
-	// ÀÌ¹Ì È°µ¿ ÁßÀÌ¸é ¸®ÅÏ
+	// ì´ë¯¸ í™œë™ ì¤‘ì´ë©´ ë¦¬í„´
 	if (active_) return;
 
 	bool prev_active = false;
@@ -173,23 +176,23 @@ void Npc::WakeUpNpc(int p_id)
 	OVER* over = g_sendPool.Acquire();
 	switch (visual_)
 	{
-		case 1:	// Agro
-		{
-			over->comp_key_ = KEY_NPC_MOVE_TO_PLAYER;
-			over->ai_target_c_id_ = p_id;
-			break;
-		}
-		case 2: // peace
-		{
-			over->comp_key_ = KEY_NPC_RANDOM_MOVE;
-			over->ai_target_c_id_ = 0;
-			break;
-		}
+	case 1:	// Agro
+	{
+		over->comp_key_ = KEY_NPC_MOVE_TO_PLAYER;
+		over->ai_target_c_id_ = p_id;
+		break;
+	}
+	case 2: // peace
+	{
+		over->comp_key_ = KEY_NPC_RANDOM_MOVE;
+		over->ai_target_c_id_ = 0;
+		break;
+	}
 	}
 	PostQueuedCompletionStatus(g_h_iocp, 1, id_, &over->over_);
 }
 
-// °¡Àå °¡±î¿î ÇÃ·¹ÀÌ¾î ID¸¦ Ã£´Â ÇïÆÛ ÇÔ¼ö
+// ê°€ì¥ ê°€ê¹Œìš´ í”Œë ˆì´ì–´ IDë¥¼ ì°¾ëŠ” í—¬í¼ í•¨ìˆ˜
 int Npc::GetNearestPlayerId()
 {
 	int nearest_id = -1;
@@ -200,15 +203,15 @@ int Npc::GetNearestPlayerId()
 		std::lock_guard<std::mutex> sec_l(g_ObjectSector[sector].mut_sector_);
 		for (auto& pid : g_ObjectSector[sector].sec_id_)
 		{
-			// ÇÃ·¹ÀÌ¾î °ËÁõ (ID ¹üÀ§, nullptr Ã¼Å©, InGame »óÅÂ Ã¼Å©)
+			// í”Œë ˆì´ì–´ ê²€ì¦ (ID ë²”ìœ„, nullptr ì²´í¬, InGame ìƒíƒœ ì²´í¬)
 			if (pid < MAX_NPC || pid >= MAX_NPC + MAX_USER) continue;
 			if (objects[pid] == nullptr) continue;
 			if (objects[pid]->state_ != OS_INGAME) continue;
 
-			// ½Ã¾ß Ã¼Å©
+			// ì‹œì•¼ ì²´í¬
 			if (false == CanSee(id_, pid)) continue;
 
-			// °Å¸® °è»ê (ÃÖ´Ü °Å¸® Å¸°Ù ¼±Á¤)
+			// ê±°ë¦¬ ê³„ì‚° (ìµœë‹¨ ê±°ë¦¬ íƒ€ê²Ÿ ì„ ì •)
 			int dist = (x_ - objects[pid]->x_) * (x_ - objects[pid]->x_)
 				+ (y_ - objects[pid]->y_) * (y_ - objects[pid]->y_);
 
@@ -222,14 +225,14 @@ int Npc::GetNearestPlayerId()
 	return nearest_id;
 }
 
-// Å¸°ÙÀÌ ¿©ÀüÈ÷ À¯È¿ÇÑÁö(Á¸ÀçÇÏ°í, ½Ã¾ß ³»ÀÎÁö) °Ë»çÇÏ´Â ÇÔ¼ö
+// íƒ€ê²Ÿì´ ì—¬ì „íˆ ìœ íš¨í•œì§€(ì¡´ì¬í•˜ê³ , ì‹œì•¼ ë‚´ì¸ì§€) ê²€ì‚¬í•˜ëŠ” í•¨ìˆ˜
 bool Npc::IsValidTarget(int target_id)
 {
 	if (target_id < MAX_NPC || target_id >= MAX_NPC + MAX_USER) return false;
 	if (objects[target_id] == nullptr) return false;
 	if (objects[target_id]->state_ != OS_INGAME) return false;
 
-	// ½Ã¾ß ¹ÛÀ¸·Î ³ª°¬À¸¸é Å¸°Ù ÇØÁ¦ (¶Ç´Â ÃßÀû °Å¸® ¼³Á¤)
+	// ì‹œì•¼ ë°–ìœ¼ë¡œ ë‚˜ê°”ìœ¼ë©´ íƒ€ê²Ÿ í•´ì œ (ë˜ëŠ” ì¶”ì  ê±°ë¦¬ ì„¤ì •)
 	if (false == CanSee(id_, target_id)) return false;
 
 	return true;
@@ -237,10 +240,10 @@ bool Npc::IsValidTarget(int target_id)
 
 void Npc::SetAiLua()
 {
-	// ai·Î µ¹¾Æ°¡´Â °Í¸¸ ¼³Á¤
+	// aië¡œ ëŒì•„ê°€ëŠ” ê²ƒë§Œ ì„¤ì •
 	auto L = L_ = luaL_newstate();
 	luaL_openlibs(L);
-	// ÆÄÀÏ ·Îµå ¹× ¿¡·¯ Ã¼Å©
+	// íŒŒì¼ ë¡œë“œ ë° ì—ëŸ¬ ì²´í¬
 	if (luaL_loadfile(L_, "npc.lua") || lua_pcall(L_, 0, 0, 0)) {
 		std::cout << "Lua Load Error: " << lua_tostring(L_, -1) << std::endl;
 		L_ = nullptr;
@@ -253,10 +256,67 @@ void Npc::SetAiLua()
 		std::cout << "Lua Error (set_uid): " << lua_tostring(L_, -1) << std::endl;
 	}
 
-	// C++ API µî·Ï
+	// C++ API ë“±ë¡
 	lua_register(L, "API_Attack", API_Attack);
 	lua_register(L, "API_get_xy", API_get_xy);
-	//ÀÌµ¿ ÇÔ¼ö µî·Ï
+	//ì´ë™ í•¨ìˆ˜ ë“±ë¡
 	lua_register(L, "API_Move", API_Move);
 }
 
+void Npc::DropItem()
+{
+	int dropTemplateId = -1;
+
+	// NPC ì¢…ë¥˜ì— ë”°ë¥¸ ë“œë¡­ ì•„ì´í…œ ê²°ì •
+	switch (visual_) 
+	{
+	case 1: // Agro NPC
+		// 30% í™•ë¥ ë¡œ ëŒ€ê²€(1001)
+		if (rand() % 100 < 30) dropTemplateId = 1001; 
+		break;
+	case 2: // Peace NPC
+		// 50% í™•ë¥ ë¡œ ë°©íŒ¨(1002)
+		if (rand() % 100 < 50) dropTemplateId = 1002;
+		break;
+	default:
+		break;
+	}
+
+	// ë“œë¡­ í™•ì •ì‹œ
+	if (dropTemplateId != -1) 
+	{
+		int map_id = GetNewMapItemId();
+		if (map_id != -1)
+		{
+			// MapItem ê°ì²´ ì´ˆê¸°í™”
+			MapItem* mapItem = dynamic_cast<MapItem*>(objects[map_id].get());
+			mapItem->id_ = map_id;
+			mapItem->x_ = x_;
+			mapItem->y_ = y_;
+			
+			// ê³ ìœ  UID ìƒì„± (ì„ì‹œë¡œ ëœë¤ê°’ ì‚¬ìš©, ì‹¤ì œë¡  DB ì‹œí€€ìŠ¤ë‚˜ UUID í•„ìš”)
+			// ì—¬ê¸°ì„œëŠ” ê°„ë‹¨íˆ ì‹œê°„ ê¸°ë°˜ ê°’ ì‚¬ìš©
+			mapItem->item_uid = std::chrono::system_clock::now().time_since_epoch().count(); 
+			mapItem->template_id = dropTemplateId;
+			mapItem->count = 1;
+			mapItem->state_ = OS_INGAME;
+			mapItem->PutInSector();
+
+			// ì£¼ë³€ í”Œë ˆì´ì–´ì—ê²Œ ì•Œë¦¼
+			for (auto& sector : mapItem->around_sector_)
+			{
+				std::lock_guard<std::mutex> sec_l(g_ObjectSector[sector].mut_sector_);
+				for (auto& pid : g_ObjectSector[sector].sec_id_)
+				{
+					if (true == IsPlayer(pid))
+					{
+						if (true == CanSee(mapItem->id_, pid)) 
+						{
+							mapItem->SendAddObjectPacket(pid);
+						}
+					}
+				}
+			}
+		}
+	}
+}

@@ -1,4 +1,4 @@
-#include "RankingManager.h"
+ï»¿#include "RankingManager.h"
 
 
 void DisplayDBError(SQLHANDLE hHandle, SQLSMALLINT hType, RETCODE RetCode);
@@ -7,19 +7,19 @@ bool IsValidName(const std::string& name)
 {
     if (name.empty()) return false;
 
-    // ÀÌ¸§ÀÌ ³Ê¹« ±æ¸é ¹«½Ã (È¤Àº Àß¶ó¼­ ¾µ°Å¸é true)
+    // ì´ë¦„ì´ ë„ˆë¬´ ê¸¸ë©´ ë¬´ì‹œ (í˜¹ì€ ì˜ë¼ì„œ ì“¸ê±°ë©´ true)
     if (name.length() > NAME_SIZE) return false;
 
-    // Á¦¾î ¹®ÀÚ(0x00~0x1F, ÁÙ¹Ù²Ş µî)°¡ Æ÷ÇÔµÇ¾î ÀÖÀ¸¸é ±úÁø °ÍÀ¸·Î °£ÁÖ
+    // ì œì–´ ë¬¸ì(0x00~0x1F, ì¤„ë°”ê¿ˆ ë“±)ê°€ í¬í•¨ë˜ì–´ ìˆìœ¼ë©´ ê¹¨ì§„ ê²ƒìœ¼ë¡œ ê°„ì£¼
     for (unsigned char c : name) {
-        // ÇÑ±Û(À½¼ö°ª char)Àº °Ç³Ê¶Ù°í, ASCII Á¦¾î ¹®ÀÚ¸¸ Ã¼Å©
+        // í•œê¸€(ìŒìˆ˜ê°’ char)ì€ ê±´ë„ˆë›°ê³ , ASCII ì œì–´ ë¬¸ìë§Œ ì²´í¬
         if (c > 0 && c < 32) return false;
     }
 
     return true;
 }
 
-// ¿À¸¥ÂÊ °ø¹é Á¦°Å
+// ì˜¤ë¥¸ìª½ ê³µë°± ì œê±°
 inline std::string RTrim(std::string s) {
     s.erase(std::find_if(s.rbegin(), s.rend(), [](unsigned char ch) {
         return !std::isspace(ch);
@@ -30,7 +30,7 @@ inline std::string RTrim(std::string s) {
 void RankingManager::LoadAllRankingsFromSQL(SQLHDBC hdbc)
 {
     if (!g_redis_client || !g_redis_client->is_connected()) return;
-    std::cout << "[Ranking] SQL -> Redis µ¿±âÈ­ ½ÃÀÛ...\n";
+    std::cout << "[Ranking] SQL -> Redis ë™ê¸°í™” ì‹œì‘...\n";
 
     SQLHSTMT hstmt;
     if (SQLAllocHandle(SQL_HANDLE_STMT, hdbc, &hstmt) != SQL_SUCCESS) {
@@ -60,35 +60,35 @@ void RankingManager::LoadAllRankingsFromSQL(SQLHDBC hdbc)
 
     int count = 0;
 
-    // ·çÇÁ ÁøÀÔ
+    // ë£¨í”„ ì§„ì…
     while (true)
     {
         ret = SQLFetch(hstmt);
 
-        // µ¥ÀÌÅÍ°¡ ´õ ÀÌ»ó ¾øÀ¸¸é Á¾·á
+        // ë°ì´í„°ê°€ ë” ì´ìƒ ì—†ìœ¼ë©´ ì¢…ë£Œ
         if (ret == SQL_NO_DATA) break;
 
-        // ¿¡·¯°¡ ³µÀ¸¸é ·Î±× Âï°í Á¾·á
+        // ì—ëŸ¬ê°€ ë‚¬ìœ¼ë©´ ë¡œê·¸ ì°ê³  ì¢…ë£Œ
         if (ret != SQL_SUCCESS && ret != SQL_SUCCESS_WITH_INFO) {
             std::cerr << "SQLFetch Failed at row " << count << "\n";
             DisplayDBError(hstmt, SQL_HANDLE_STMT, ret);
             break;
         }
 
-        // Á¤»ó µ¥ÀÌÅÍ Ã³¸®
+        // ì •ìƒ ë°ì´í„° ì²˜ë¦¬
         std::string name_str = WStringToString(name);
         name_str = RTrim(name_str);
         std::string key = "User:" + name_str;
 
-        // ·©Å·(ZSET) µî·Ï - multimap »ç¿ë
+        // ë­í‚¹(ZSET) ë“±ë¡ - multimap ì‚¬ìš©
         std::multimap<std::string, std::string> zadd_data;
         zadd_data.insert({ std::to_string(exp), name_str });
         g_redis_client->zadd("Leaderboard", {}, zadd_data);
 
-        // »ó¼¼Á¤º¸(Hash) µî·Ï
+        // ìƒì„¸ì •ë³´(Hash) ë“±ë¡
         g_redis_client->hset(key, "level", std::to_string(level));
 
-        // TTL ¼³Á¤ (1ÁÖÀÏ)
+        // TTL ì„¤ì • (1ì£¼ì¼)
         g_redis_client->expire(key, 604800);
 
         count++;
@@ -97,80 +97,80 @@ void RankingManager::LoadAllRankingsFromSQL(SQLHDBC hdbc)
 
     g_redis_client->sync_commit();
     SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
-    std::cout << "[Ranking] µ¿±âÈ­ ¿Ï·á (" << count << "¸í)\n";
+    std::cout << "[Ranking] ë™ê¸°í™” ì™„ë£Œ (" << count << "ëª…)\n";
 }
 
-// 2. Redis¿¡¼­ Top 100 °¡Á®¿À±â (10ÃÊ¸¶´Ù È£Ãâ)
+// 2. Redisì—ì„œ Top 100 ê°€ì ¸ì˜¤ê¸° (10ì´ˆë§ˆë‹¤ í˜¸ì¶œ)
 void RankingManager::UpdateRankingCache()
 {
     std::vector<std::string> valid_names;
-    const int TARGET_COUNT = 100; // ¸ñÇ¥ ÀÎ¿ø
-    int start_index = 0;          // Redis Á¶È¸ ½ÃÀÛ ÀÎµ¦½º
+    const int TARGET_COUNT = 100; // ëª©í‘œ ì¸ì›
+    int start_index = 0;          // Redis ì¡°íšŒ ì‹œì‘ ì¸ë±ìŠ¤
 
-    // ¸ñÇ¥ ÀÎ¿øÀ» Ã¤¿ï ¶§±îÁö ¹İº¹ (¶Ç´Â DB ³¡±îÁö)
+    // ëª©í‘œ ì¸ì›ì„ ì±„ìš¸ ë•Œê¹Œì§€ ë°˜ë³µ (ë˜ëŠ” DB ëê¹Œì§€)
     while (valid_names.size() < TARGET_COUNT)
     {
-        // ºÎÁ·ÇÑ ÀÎ¿ø ¼ö °è»ê
+        // ë¶€ì¡±í•œ ì¸ì› ìˆ˜ ê³„ì‚°
         int needed = TARGET_COUNT - (int)valid_names.size();
 
-        // µü ºÎÁ·ÇÑ ¸¸Å­¸¸ ¿äÃ»ÇÏ¸é ¶Ç ±úÁø ÀÌ¸§ÀÌ ³ª¿Ã °æ¿ì ´Ù½Ã ¿äÃ»ÇØ¾ß ÇÔ
+        // ë”± ë¶€ì¡±í•œ ë§Œí¼ë§Œ ìš”ì²­í•˜ë©´ ë˜ ê¹¨ì§„ ì´ë¦„ì´ ë‚˜ì˜¬ ê²½ìš° ë‹¤ì‹œ ìš”ì²­í•´ì•¼ í•¨
         int fetch_count = needed + 10;
         int end_index = start_index + fetch_count - 1;
 
-        // ÀÌ¸§ ¸ñ·Ï °¡Á®¿À±â (Range ¿äÃ»)
+        // ì´ë¦„ ëª©ë¡ ê°€ì ¸ì˜¤ê¸° (Range ìš”ì²­)
         auto zrev_future = g_redis_client->zrevrange("Leaderboard", start_index, end_index);
-        g_redis_client->sync_commit(); // ´ë±â
+        g_redis_client->sync_commit(); // ëŒ€ê¸°
 
         auto reply = zrev_future.get();
 
-        // ¿¡·¯°Å³ª ¹è¿­ÀÌ ¾Æ´Ï¸é Áß´Ü
+        // ì—ëŸ¬ê±°ë‚˜ ë°°ì—´ì´ ì•„ë‹ˆë©´ ì¤‘ë‹¨
         if (reply.is_null() || !reply.is_array()) break;
 
         auto arr = reply.as_array();
 
-        // µ¥ÀÌÅÍ°¡ ¾Æ¿¹ ¾øÀ¸¸é (³¡±îÁö ´Ù ÀĞÀ½) ·çÇÁ Á¾·á
+        // ë°ì´í„°ê°€ ì•„ì˜ˆ ì—†ìœ¼ë©´ (ëê¹Œì§€ ë‹¤ ì½ìŒ) ë£¨í”„ ì¢…ë£Œ
         if (arr.empty()) break;
 
-        // À¯È¿¼º °Ë»ç ¹× ÀúÀå
+        // ìœ íš¨ì„± ê²€ì‚¬ ë° ì €ì¥
         for (const auto& item : arr)
         {
-            // ÀÌ¹Ì ¸ñÇ¥¸¦ ´Ù Ã¤¿üÀ¸¸é ±×¸¸ ´ã±â
+            // ì´ë¯¸ ëª©í‘œë¥¼ ë‹¤ ì±„ì› ìœ¼ë©´ ê·¸ë§Œ ë‹´ê¸°
             if (valid_names.size() >= TARGET_COUNT) break;
 
             std::string raw_name = item.as_string();
 
-            // ÀÌ¸§ÀÌ À¯È¿ÇÏÁö ¾ÊÀ¸¸é °Ç³Ê¶Ü (´ãÁö ¾ÊÀ½)
+            // ì´ë¦„ì´ ìœ íš¨í•˜ì§€ ì•Šìœ¼ë©´ ê±´ë„ˆëœ€ (ë‹´ì§€ ì•ŠìŒ)
             if (IsValidName(raw_name) == false)
             {
-                // Redis¿¡¼­ »èÁ¦: g_redis_client->zrem("Leaderboard", { raw_name });
+                // Redisì—ì„œ ì‚­ì œ: g_redis_client->zrem("Leaderboard", { raw_name });
                 continue;
             }
 
             valid_names.push_back(raw_name);
         }
 
-        // ´ÙÀ½ ·çÇÁ¸¦ À§ÇØ ½ÃÀÛ ÀÎµ¦½º °»½Å
-        // ÀÌ¹ø¿¡ ÀĞ¾î¿Â °³¼ö¸¸Å­ ÀÎµ¦½º¸¦ µÚ·Î ¹Ò
+        // ë‹¤ìŒ ë£¨í”„ë¥¼ ìœ„í•´ ì‹œì‘ ì¸ë±ìŠ¤ ê°±ì‹ 
+        // ì´ë²ˆì— ì½ì–´ì˜¨ ê°œìˆ˜ë§Œí¼ ì¸ë±ìŠ¤ë¥¼ ë’¤ë¡œ ë°ˆ
         start_index += (int)arr.size();
 
-        // ¿äÃ»ÇÑ °³¼öº¸´Ù Àû°Ô ¿Ô´Ù´Â °Ç, DB¿¡ ³²Àº »ç¶÷ÀÌ ´õ ¾ø´Ù´Â ¶æ
+        // ìš”ì²­í•œ ê°œìˆ˜ë³´ë‹¤ ì ê²Œ ì™”ë‹¤ëŠ” ê±´, DBì— ë‚¨ì€ ì‚¬ëŒì´ ë” ì—†ë‹¤ëŠ” ëœ»
         if (arr.size() < fetch_count) break;
     }
 
     if (valid_names.empty()) return;
 
-    // °¢ À¯ÀúÀÇ ·¹º§ Á¤º¸ °¡Á®¿À±â (ÆÄÀÌÇÁ¶óÀÌ´×)
+    // ê° ìœ ì €ì˜ ë ˆë²¨ ì •ë³´ ê°€ì ¸ì˜¤ê¸° (íŒŒì´í”„ë¼ì´ë‹)
     std::vector<std::future<cpp_redis::reply>> futures;
 
     for (const auto& name : valid_names)
     {
         futures.push_back(g_redis_client->hget("User:" + name, "level"));
     }
-    // blockingÀ¸·Î °ª ±â´Ù¸²
+    // blockingìœ¼ë¡œ ê°’ ê¸°ë‹¤ë¦¼
     g_redis_client->sync_commit();
 
 
-    // °á°ú Á¶¸³ ¹× Ä³½Ã °»½Å
+    // ê²°ê³¼ ì¡°ë¦½ ë° ìºì‹œ ê°±ì‹ 
     std::vector<RankInfo> temp_ranks;
     int rank_counter = 1;
 
@@ -188,56 +188,56 @@ void RankingManager::UpdateRankingCache()
         }
         else
         {
-            info.level = 0; // µ¥ÀÌÅÍ°¡ ¾ø°Å³ª ¿¡·¯ ½Ã ±âº»°ª
+            info.level = 0; // ë°ì´í„°ê°€ ì—†ê±°ë‚˜ ì—ëŸ¬ ì‹œ ê¸°ë³¸ê°’
         }
 
         // std::cout << "Rank " << info.rank << " : " << info.name << " (Lv." << info.level << ")\n";
         temp_ranks.push_back(info);
     }
 
-    // C++¿¡¼­ ÀçÁ¤·Ä (Level ³»¸²Â÷¼ø -> Name ¿À¸§Â÷¼ø)
+    // C++ì—ì„œ ì¬ì •ë ¬ (Level ë‚´ë¦¼ì°¨ìˆœ -> Name ì˜¤ë¦„ì°¨ìˆœ)
     std::sort(temp_ranks.begin(), temp_ranks.end(), [](const RankInfo& a, const RankInfo& b) {
-        // ·¹º§ ºñ±³ (³ôÀº °Ô À§·Î)
+        // ë ˆë²¨ ë¹„êµ (ë†’ì€ ê²Œ ìœ„ë¡œ)
         if (a.level != b.level)
             return a.level > b.level;
 
-        // ·¹º§ÀÌ °°À¸¸é ÀÌ¸§ ºñ±³ (»çÀü¼ø, strcmp)
+        // ë ˆë²¨ì´ ê°™ìœ¼ë©´ ì´ë¦„ ë¹„êµ (ì‚¬ì „ìˆœ, strcmp)
         return strcmp(a.name, b.name) < 0;
         });
 
-    // Á¤·ÄµÈ ¼ø¼­´ë·Î ·©Å· ¹øÈ£ ºÎ¿© (1~100)
+    // ì •ë ¬ëœ ìˆœì„œëŒ€ë¡œ ë­í‚¹ ë²ˆí˜¸ ë¶€ì—¬ (1~100)
     for (int i = 0; i < temp_ranks.size(); ++i)
     {
         temp_ranks[i].rank = i + 1;
     }
 
-    // Ä³½Ã ±³Ã¼
+    // ìºì‹œ êµì²´
     {
         std::lock_guard<std::mutex> lock(cache_lock_);
         cached_ranking_ = temp_ranks;
     }
 }
 
-// ·©Å· ÆĞÅ¶ Àü¼Û
+// ë­í‚¹ íŒ¨í‚· ì „ì†¡
 void RankingManager::SendRankingToPlayer(int session_id)
 {
     SC_RANKING_PACKET packet;
     packet.size = sizeof(SC_RANKING_PACKET);
-    packet.type = SC_RANKING; // Á¤ÀÇµÈ »ó¼ö »ç¿ë
+    packet.type = SC_RANKING; // ì •ì˜ëœ ìƒìˆ˜ ì‚¬ìš©
 
     {
         std::lock_guard<std::mutex> lock(cache_lock_);
         packet.count = (int)cached_ranking_.size();
         if (packet.count > 100) packet.count = 100;
 
-        // ¸Ş¸ğ¸® º¹»ç
+        // ë©”ëª¨ë¦¬ ë³µì‚¬
         if (packet.count > 0)
         {
             memcpy(packet.ranks, cached_ranking_.data(), sizeof(RankInfo) * packet.count);
         }
     }
 
-    // ¼¼¼ÇÀÌ À¯È¿ÇÏ´Ù¸é Àü¼Û
+    // ì„¸ì…˜ì´ ìœ íš¨í•˜ë‹¤ë©´ ì „ì†¡
     if (objects[session_id])
     {
         objects[session_id]->DoSend(&packet);

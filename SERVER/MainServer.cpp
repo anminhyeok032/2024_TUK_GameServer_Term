@@ -112,6 +112,7 @@ void Worker()
 				objects[client_id]->x_ = 0;
 				objects[client_id]->y_ = 0;
 				objects[client_id]->id_ = client_id;
+				static_cast<Player*>(objects[client_id].get())->InitInventory();
 				objects[client_id]->name_[0] = 0;
 				objects[client_id]->prev_packet_.clear();
 				objects[client_id]->visual_ = 0;
@@ -190,7 +191,14 @@ void disconnect(int c_id)
 
 	for (auto& sector : objects[c_id]->around_sector_)
 	{
-		for (auto& id : g_ObjectSector[sector].sec_id_)
+		// sec_id_만 복사 후 순회
+		std::unordered_set<int> snapshot_ids;
+		{
+			std::lock_guard<std::mutex> sec_l(g_ObjectSector[sector].mut_sector_);
+			snapshot_ids = g_ObjectSector[sector].sec_id_;
+		}
+
+		for (auto& id : snapshot_ids)
 		{
 			{
 				std::lock_guard<std::mutex> ll(objects[id]->mut_state_);

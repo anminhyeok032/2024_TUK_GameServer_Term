@@ -1,4 +1,4 @@
-#include "global.h"
+ï»¿#include "global.h"
 #include "Session.h"
 
 std::unique_ptr<cpp_redis::client> g_redis_client;
@@ -17,15 +17,15 @@ std::string WStringToString(const SQLWCHAR* wstr)
 {
 	if (!wstr) return "";
 
-	// 1. ÇÊ¿äÇÑ ¹öÆÛ Å©±â °è»ê (³Î ¹®ÀÚ Á¦¿Ü)
+	// 1. í•„ìš”í•œ ë²„í¼ í¬ê¸° ê³„ì‚° (ë„ ë¬¸ì ì œì™¸)
 	int size_needed = WideCharToMultiByte(CP_UTF8, 0, (LPCWSTR)wstr, -1, NULL, 0, NULL, NULL);
 
-	// 2. º¯È¯ (size_needed¿¡´Â ³Î ¹®ÀÚ°¡ Æ÷ÇÔµÇ¾î ÀÖÀ½)
+	// 2. ë³€í™˜ (size_neededì—ëŠ” ë„ ë¬¸ìê°€ í¬í•¨ë˜ì–´ ìˆìŒ)
 	std::string strTo(size_needed, 0);
 	WideCharToMultiByte(CP_UTF8, 0, (LPCWSTR)wstr, -1, &strTo[0], size_needed, NULL, NULL);
 
-	// ¡Ú [ÇÙ½É] C++ stringÀº ³Î ¹®ÀÚ¸¦ ½ÇÁ¦ µ¥ÀÌÅÍ·Î °¡Áú ¼ö ÀÖÀ¸¹Ç·Î, 
-	// º¯È¯ ÈÄ ¸Ç µÚ¿¡ \0ÀÌ µé¾î°¬´Ù¸é Á¦°ÅÇØ¾ß ÇÔ.
+	// â˜… [í•µì‹¬] C++ stringì€ ë„ ë¬¸ìë¥¼ ì‹¤ì œ ë°ì´í„°ë¡œ ê°€ì§ˆ ìˆ˜ ìˆìœ¼ë¯€ë¡œ, 
+	// ë³€í™˜ í›„ ë§¨ ë’¤ì— \0ì´ ë“¤ì–´ê°”ë‹¤ë©´ ì œê±°í•´ì•¼ í•¨.
 	if (!strTo.empty() && strTo.back() == '\0') {
 		strTo.pop_back();
 	}
@@ -38,7 +38,7 @@ bool ConnectWithRedis()
 	std::cout << "=====Connecting to Redis=====\n";
 
 	try {
-		// ±âº» Æ÷Æ® 6379, localhost
+		// ê¸°ë³¸ í¬íŠ¸ 6379, localhost
 		g_redis_client->connect("127.0.0.1", 6379, [](const std::string& host, std::size_t port, cpp_redis::client::connect_state status) 
 			{
 				if (status == cpp_redis::client::connect_state::dropped) {

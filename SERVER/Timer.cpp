@@ -1,4 +1,4 @@
-#include "global.h"
+ï»¿#include "global.h"
 #include "Session.h"
 #include "Npc.h"
 
@@ -21,14 +21,14 @@ void DoAITimer() {
 			continue;
 		}
 
-		// try_popÀ¸·Î »ÌÀº ÀÌº¥Æ®°¡ ÇöÀç ½Ã°£º¸´Ù µÚ¶ó¸é next_event¿¡ ³Ö°í ½½¸³
+		// try_popìœ¼ë¡œ ë½‘ì€ ì´ë²¤íŠ¸ê°€ í˜„ì¬ ì‹œê°„ë³´ë‹¤ ë’¤ë¼ë©´ next_eventì— ë„£ê³  ìŠ¬ë¦½
 		if (ev.wakeup_time_ > current_time) {
 			g_event_queue.push(ev);
 			std::this_thread::sleep_for(std::chrono::milliseconds(1));
 			continue;
 		}
 
-		// ÀÌº¥Æ® Ã³¸® ·ÎÁ÷
+		// ì´ë²¤íŠ¸ ì²˜ë¦¬ ë¡œì§
 		switch (ev.e_type_) {
 		case EV_ATTACK:
 		{
@@ -61,13 +61,13 @@ void DoAITimer() {
 	}
 }
 
-// Lua È£Ãâ: API_get_xy(id)
+// Lua í˜¸ì¶œ: API_get_xy(id)
 int API_get_xy(lua_State* L)
 {
-	// ÀÎÀÚ °¡Á®¿À±â (½ºÅÃ 1¹ø: user_id)
+	// ì¸ì ê°€ì ¸ì˜¤ê¸° (ìŠ¤íƒ 1ë²ˆ: user_id)
 	int user_id = (int)lua_tointeger(L, 1);
 
-	// À¯È¿¼º °Ë»ç
+	// ìœ íš¨ì„± ê²€ì‚¬
 	if (user_id < 0 || user_id >= MAX_NPC + MAX_USER || objects[user_id] == nullptr) {
 		lua_pushinteger(L, -1);
 		lua_pushinteger(L, -1);
@@ -77,27 +77,27 @@ int API_get_xy(lua_State* L)
 	int x = objects[user_id]->x_;
 	int y = objects[user_id]->y_;
 
-	// °á°ú Çª½Ã
+	// ê²°ê³¼ í‘¸ì‹œ
 	lua_pushinteger(L, x);
 	lua_pushinteger(L, y);
 
-	return 2; // ¸®ÅÏ°ª °³¼ö´Â 2°³ (x, y)
+	return 2; // ë¦¬í„´ê°’ ê°œìˆ˜ëŠ” 2ê°œ (x, y)
 }
 
-// Lua È£Ãâ: API_Move(my_id, direction)
+// Lua í˜¸ì¶œ: API_Move(my_id, direction)
 int API_Move(lua_State* L)
 {
-	int my_id = (int)lua_tointeger(L, 1); // Ã¹ ¹øÂ° ÀÎÀÚ
-	int dir = (int)lua_tointeger(L, 2);   // µÎ ¹øÂ° ÀÎÀÚ
+	int my_id = (int)lua_tointeger(L, 1); // ì²« ë²ˆì§¸ ì¸ì
+	int dir = (int)lua_tointeger(L, 2);   // ë‘ ë²ˆì§¸ ì¸ì
 
-	// Npc °´Ã¼ÀÎÁö È®ÀÎÇÏ°í ÀÌµ¿ ÇÔ¼ö È£Ãâ
+	// Npc ê°ì²´ì¸ì§€ í™•ì¸í•˜ê³  ì´ë™ í•¨ìˆ˜ í˜¸ì¶œ
 	if (my_id >= 0 && my_id < MAX_NPC && objects[my_id]) {
 		Npc* npc = dynamic_cast<Npc*>(objects[my_id].get());
 		if (npc) {
 			npc->Move(dir);
 		}
 	}
-	return 0; // ¹İÈ¯°ª ¾øÀ½
+	return 0; // ë°˜í™˜ê°’ ì—†ìŒ
 }
 
 int API_Attack(lua_State* L)
@@ -111,7 +111,7 @@ int API_Attack(lua_State* L)
 	//objects[target_id]->SendStatChangePacket();
 
 
-	//// °ø°İ ÆÇÁ¤ ¸Â´Â »ç¶÷ ÀÔÀå view_list ºê·Îµå Ä³½ºÆÃ
+	//// ê³µê²© íŒì • ë§ëŠ” ì‚¬ëŒ ì…ì¥ view_list ë¸Œë¡œë“œ ìºìŠ¤íŒ…
 	//for (auto& view_list : objects[target_id]->view_list_)
 	//{
 	//	objects[view_list]->SendAttackPacket(my_id, target_id, 0);
@@ -119,7 +119,7 @@ int API_Attack(lua_State* L)
 
 	////if (objects[id]->hp_ <= 0)
 	////{
-	////	// Á×À½ Ã³¸®
+	////	// ì£½ìŒ ì²˜ë¦¬
 	////	objects[id]->hp_ = 0;
 	////	objects[id]->state_ = OS_DEAD;
 	////	int getting_exp = objects[id]->level_ * objects[id]->level_ * 2;
@@ -137,7 +137,7 @@ int API_Attack(lua_State* L)
 	////		objects[view_list]->SendAttackPacket(id_, objects[id]->id_, getting_exp);
 	////	}
 
-	////	// NpcÀÇ ºä¸®½ºÆ®¿¡ ÀÖ´Â PlayerÇÑÅ×¸¸ º¸³¿
+	////	// Npcì˜ ë·°ë¦¬ìŠ¤íŠ¸ì— ìˆëŠ” Playerí•œí…Œë§Œ ë³´ëƒ„
 	////	for (auto& view_list : objects[id]->view_list_)
 	////	{
 	////		objects[view_list]->SendRemoveObjectPacket(id);

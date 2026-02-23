@@ -1,4 +1,4 @@
-#include "global.h"
+ï»¿#include "global.h"
 #include "Session.h"
 
 void DisplayDBError(SQLHANDLE hHandle, SQLSMALLINT hType, RETCODE RetCode)
@@ -98,19 +98,19 @@ void DBWoker(SQLHDBC hdbc)
 
 void ProcessDBRequest(const DBRequest& request, SQLHDBC& hdbc) 
 {
-	// ±âÁ¸ DBCheckLogin ÄÚµå¿¡¼­ switch ¹®À» ÃßÃâÇÏ¿© ¿©±â¼­ Ã³¸®
+	// ê¸°ì¡´ DBCheckLogin ì½”ë“œì—ì„œ switch ë¬¸ì„ ì¶”ì¶œí•˜ì—¬ ì—¬ê¸°ì„œ ì²˜ë¦¬
 	switch (request.db_type) {
 	case DBRequest::LOGIN:
-		// ·Î±×ÀÎ Ã³¸® ·ÎÁ÷
+		// ë¡œê·¸ì¸ ì²˜ë¦¬ ë¡œì§
 		objects[request.id]->DBLogin(hdbc);
 		break;
 	case DBRequest::LOGOUT:
-		// ·Î±×¾Æ¿ô Ã³¸® ·ÎÁ÷
+		// ë¡œê·¸ì•„ì›ƒ ì²˜ë¦¬ ë¡œì§
 		objects[request.id]->DBLogout(hdbc);
 		break;
 	
-	case DBRequest::SAVE_REDIS: // Redis ÀúÀå Ã³¸®
-		// dynamic_cast Ã¼Å©³ª À¯È¿¼º °Ë»ç ÇÊ¿ä
+	case DBRequest::SAVE_REDIS: // Redis ì €ìž¥ ì²˜ë¦¬
+		// dynamic_cast ì²´í¬ë‚˜ ìœ íš¨ì„± ê²€ì‚¬ í•„ìš”
 		if (objects[request.id]->state_ == OS_INGAME)
 			objects[request.id]->SaveToRedis();
 		break;

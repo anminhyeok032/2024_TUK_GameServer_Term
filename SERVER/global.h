@@ -56,6 +56,9 @@ bool IsNpc(int a);
 bool IsPlayer(int a);
 bool IsMapItem(int a); // 맵 아이템인지 확인 (ID 범위로 판단)
 
+// 빈 맵 아이템 슬롯 찾기 함수
+int GetNewMapItemId();
+
 void disconnect(int c_id);
 
 

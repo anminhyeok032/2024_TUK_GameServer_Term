@@ -28,7 +28,7 @@ public:
 	bool MoveItem(long long item_uid, int new_x, int new_y, bool new_rotated);
 
 	// 아이템 제거
-	bool RemoveItem(long long item_uid);
+	Item* RemoveItem(long long item_uid);
 
 	// 해당 위치에 아이템을 놓을 수 있는지 검사
 	bool CanPlace(int x, int y, int w, int h, long long exclude_item_uid = 0);

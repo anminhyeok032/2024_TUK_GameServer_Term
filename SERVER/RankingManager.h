@@ -1,10 +1,10 @@
-#pragma once
+ï»¿#pragma once
 #include "Session.h"
 
 class RankingManager
 {
 private:
-    std::vector<RankInfo> cached_ranking_; // 100¸íÀÇ ·©Ä¿ Á¤º¸
+    std::vector<RankInfo> cached_ranking_; // 100ëª…ì˜ ë­ì»¤ ì •ë³´
     std::mutex cache_lock_;
 
 public:
@@ -13,13 +13,13 @@ public:
         return &instance;
     }
 
-    // ¼­¹ö ½ÃÀÛ ½Ã SQL µ¥ÀÌÅÍ¸¦ Redis·Î ÇÑ ¹ø ·Îµù (ÃÊ±âÈ­)
+    // ì„œë²„ ì‹œì‘ ì‹œ SQL ë°ì´í„°ë¥¼ Redisë¡œ í•œ ë²ˆ ë¡œë”© (ì´ˆê¸°í™”)
     void LoadAllRankingsFromSQL(SQLHDBC hdbc);
 
-    // [ÁÖ±âÀû È£Ãâ] Redis -> ¼­¹ö ¸Ş¸ğ¸® Ä³½Ã °»½Å
+    // [ì£¼ê¸°ì  í˜¸ì¶œ] Redis -> ì„œë²„ ë©”ëª¨ë¦¬ ìºì‹œ ê°±ì‹ 
     void UpdateRankingCache();
 
-    // Å¬¶óÀÌ¾ğÆ®¿¡°Ô Ä³½ÌµÈ ·©Å· Àü¼Û
+    // í´ë¼ì´ì–¸íŠ¸ì—ê²Œ ìºì‹±ëœ ë­í‚¹ ì „ì†¡
     void SendRankingToPlayer(int session_id);
 
 };

@@ -136,12 +136,13 @@ bool Inventory::MoveItem(long long item_uid, int new_x, int new_y, bool new_rota
 	return PlaceItem(item, new_x, new_y, new_rotated);
 }
 
-bool Inventory::RemoveItem(long long item_uid)
+Item* Inventory::RemoveItem(long long item_uid)
 {
 	auto it = items_.find(item_uid);
-	if (it == items_.end()) return false;
+	if (it == items_.end()) return nullptr;
 
 	Item* item = it->second;
+
 	ItemTemplate info = GetItemTemplate(item->template_id);
 	int w = item->is_rotated ? info.height : info.width;
 	int h = item->is_rotated ? info.width : info.height;
@@ -154,8 +155,7 @@ bool Inventory::RemoveItem(long long item_uid)
 	}
 
 	items_.erase(it);
-	delete item; // 메모리 해제
-	return true;
+	return item;
 }
 
 std::vector<std::pair<std::string, std::string>> Inventory::GetInventoryDataForRedis()

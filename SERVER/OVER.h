@@ -1,4 +1,4 @@
-#pragma once
+ï»¿#pragma once
 #include "global.h"
 #include "protocol.h"
 
@@ -10,7 +10,7 @@ public:
 	char send_buf_[BUF_SIZE];
 	COMP_KEY comp_key_;
 
-	// ai_target_c_id_ : AI°¡ ÃßÀûÇÏ´Â ´ë»óÀÇ client id
+	// ai_target_c_id_ : AIê°€ ì¶”ì í•˜ëŠ” ëŒ€ìƒì˜ client id
 	int ai_target_c_id_;
 
 	OVER()
@@ -36,38 +36,38 @@ template<typename MemoryPool>
 class ObjectPool
 {
 private:
-    concurrency::concurrent_queue<MemoryPool*> pool_;   // °´Ã¼ Ç®
-    std::atomic<size_t> max_size_;                      // ÃÖ´ë °´Ã¼ Å©±â
-    std::atomic<size_t> current_size_;                  // ÇöÀç °´Ã¼ Å©±â
+    concurrency::concurrent_queue<MemoryPool*> pool_;   // ê°ì²´ í’€
+    std::atomic<size_t> max_size_;                      // ìµœëŒ€ ê°ì²´ í¬ê¸°
+    std::atomic<size_t> current_size_;                  // í˜„ì¬ ê°ì²´ í¬ê¸°
 public:
     ObjectPool(size_t maxSize)
         : max_size_(maxSize), current_size_(0) { }
 
-    // °´Ã¼ °¡Á®¿À±â
+    // ê°ì²´ ê°€ì ¸ì˜¤ê¸°
     MemoryPool* Acquire()
     {
         MemoryPool* obj = nullptr;
-        // Àç»ç¿ë °¡´ÉÇÑ °´Ã¼°¡ ÀÖÀ¸¸é ¹İÈ¯
+        // ì¬ì‚¬ìš© ê°€ëŠ¥í•œ ê°ì²´ê°€ ìˆìœ¼ë©´ ë°˜í™˜
         if (pool_.try_pop(obj))
             return obj;
-        // ¾øÀ¸¸é »õ·Î »ı¼º
+        // ì—†ìœ¼ë©´ ìƒˆë¡œ ìƒì„±
         current_size_.fetch_add(1, std::memory_order_relaxed);
         return new MemoryPool();
     }
 
-    // °´Ã¼ ¹İÈ¯ (max_size ÃÊ°ú ½Ã ¹Ù·Î »èÁ¦)
+    // ê°ì²´ ë°˜í™˜ (max_size ì´ˆê³¼ ì‹œ ë°”ë¡œ ì‚­ì œ)
     void Release(MemoryPool* obj)
     {
-        // °´Ã¼°¡ max_size ÀÌÇÏÀÏ ¶§¸¸ Ç®¿¡ ¹İÈ¯
+        // ê°ì²´ê°€ max_size ì´í•˜ì¼ ë•Œë§Œ í’€ì— ë°˜í™˜
         if (current_size_.load(std::memory_order_relaxed) <= max_size_)
             pool_.push(obj);
-        // °´Ã¼ ¹İÈ¯
+        // ê°ì²´ ë°˜í™˜
         else
             delete obj;
             current_size_.fetch_sub(1, std::memory_order_relaxed);
     }
 
-    // ÁÖ±âÀû Trim - max_sizeº¸´Ù ¸¹ÀÌ ½×ÀÎ °æ¿ì Á¤¸®
+    // ì£¼ê¸°ì  Trim - max_sizeë³´ë‹¤ ë§ì´ ìŒ“ì¸ ê²½ìš° ì •ë¦¬
     void Trim() 
     {
         MemoryPool* obj = nullptr;
@@ -80,12 +80,12 @@ public:
         }
         if (delete_count > 0)
         {
-            //std::cout << "ÁÖ±âÀû Á¤¸® - " << delete_count << "°³ »èÁ¦";
-            //Log(delete_count); // ÁÖ±âÀû Á¤¸® - delete_count°³ »èÁ¦
+            //std::cout << "ì£¼ê¸°ì  ì •ë¦¬ - " << delete_count << "ê°œ ì‚­ì œ";
+            //Log(delete_count); // ì£¼ê¸°ì  ì •ë¦¬ - delete_countê°œ ì‚­ì œ
         }
     }
 
-    // max_size¸¦ ÇÃ·¹ÀÌ¾î ¼ö¿¡ ¸ÂÃç º¯°æÇÏ¿© ¸Ş¸ğ¸® ³¶ºñ¸¦ ÁÙÀÌ±â
+    // max_sizeë¥¼ í”Œë ˆì´ì–´ ìˆ˜ì— ë§ì¶° ë³€ê²½í•˜ì—¬ ë©”ëª¨ë¦¬ ë‚­ë¹„ë¥¼ ì¤„ì´ê¸°
     void SetMaxSize(size_t newMax)
     {
         max_size_.store(newMax, std::memory_order_relaxed);
@@ -100,16 +100,16 @@ public:
     {
         switch (type) {
         case 0: 
-            std::cout << "Àç»ç¿ëµÈ °´Ã¼ »ç¿ë";                          
+            std::cout << "ì¬ì‚¬ìš©ëœ ê°ì²´ ì‚¬ìš©";                          
             break;
         case 1: 
-            std::cout << "°´Ã¼°¡ max_size¸¦ ÃÊ°úÇÏ¿© »õ·Î »ı¼ºµÊ";      
+            std::cout << "ê°ì²´ê°€ max_sizeë¥¼ ì´ˆê³¼í•˜ì—¬ ìƒˆë¡œ ìƒì„±ë¨";      
             break;
         case 2: 
-            std::cout << "°´Ã¼ ¹İÈ¯";                                   
+            std::cout << "ê°ì²´ ë°˜í™˜";                                   
             break;
         case 3: 
-            std::cout << "°´Ã¼°¡ max_size¸¦ ÃÊ°úÇÏ¿© »èÁ¦µÊ";
+            std::cout << "ê°ì²´ê°€ max_sizeë¥¼ ì´ˆê³¼í•˜ì—¬ ì‚­ì œë¨";
             break;
         default:     
             break;

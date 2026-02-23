@@ -4,6 +4,7 @@
 // 전방 선언
 class Inventory; 
 class RankingManager;
+class Item;
 
 class Player : public SESSION
 {
@@ -22,6 +23,8 @@ public:
 	Player();
 	~Player();
 
+	void InitInventory();
+
 	SOCKET GetSocket() { return socket_; };
 	void CloseSocket() { closesocket(socket_); socket_ = INVALID_SOCKET; }
 	void SetSocket(SOCKET socket) { socket_ = socket; }
@@ -39,6 +42,7 @@ public:
 	void SendAttackPacket(int attacker_id, int damaged_id, int exp, char attack_type, char direction) override;
 	
 	void SendStatChangePacket() override;
+	void SendGetItemPacket(Item* item);
 
 	void DBLogin(SQLHDBC& hdbc) override;
 	void DBLogout(SQLHDBC& hdbc) override;

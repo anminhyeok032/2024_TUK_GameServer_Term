@@ -19,12 +19,18 @@ void print_error(const char* msg, int err_no)
 
 Player::Player() : socket_(INVALID_SOCKET), exp_(0), inventory_(nullptr)
 {
-	inventory_ = new Inventory(id_);
+	//inventory_ = new Inventory(id_);
 }
 
 Player::~Player()
 {
 	if (inventory_) delete inventory_;
+}
+
+void Player::InitInventory()
+{
+	if (inventory_) delete inventory_;
+	inventory_ = new Inventory(id_);
 }
 
 void Player::DoReceive()
@@ -169,6 +175,20 @@ void Player::SendStatChangePacket()
 	packet.max_hp = max_hp_;
 	packet.exp = exp_;
 	packet.level = level_;
+	DoSend(&packet);
+}
+
+void Player::SendGetItemPacket(Item* item)
+{
+	SC_GET_ITEM_PACKET packet;
+	packet.size = sizeof(SC_GET_ITEM_PACKET);
+	packet.type = SC_GET_ITEM;
+	packet.item_uid = item->item_uid;
+	packet.template_id = item->template_id;
+	packet.count = item->count;
+	packet.x = item->x;
+	packet.y = item->y;
+	packet.is_rotated = item->is_rotated;
 	DoSend(&packet);
 }
 
@@ -642,28 +662,31 @@ void Player::ProcessPacket(char* packet)
 				{
 					if (id == id_) continue;
 					if (true == IsPlayer(id)) continue;
+
 					{
 						std::lock_guard<std::mutex> ll(objects[id]->mut_state_);
 						if (OS_INGAME != objects[id]->state_) continue;
 					}
+
 					if (objects[id]->x_ == coord.first && objects[id]->y_ == coord.second)
 					{
 						// 공격 성공
 						objects[id]->hp_ -= damage;
-						objects[id]->SendStatChangePacket();
-
-						// TODO: 경험치 로직이 들어가야함
-						// 맞은 것을 보는 모든 유저 view_list 한테도 캐스팅
-						for (auto& view_list : objects[id]->view_list_)
-						{
-							objects[view_list]->SendAttackPacket(id_, objects[id]->id_, 0, p->attack_type, p->attack_direction);
-						}
+						//objects[id]->SendStatChangePacket();
 
 						if (objects[id]->hp_ <= 0)
 						{
-							// 사망 처리
+							// 사망
 							objects[id]->hp_ = 0;
 							objects[id]->state_ = OS_DEAD;
+
+							// NPC라면 아이템 드롭 시도
+							if (true == IsNpc(id))
+							{
+								Npc* npc = dynamic_cast<Npc*>(objects[id].get());
+								if (npc) npc->DropItem();
+							}
+
 							int getting_exp = objects[id]->level_ * objects[id]->level_ * 2;
 							exp_ += getting_exp;
 							int required_exp = static_cast<int>(100 * pow(2, level_ - 1));
@@ -674,19 +697,23 @@ void Player::ProcessPacket(char* packet)
 								std::cout << "Level up - " << level_ << "!" << std::endl;
 								g_db_request_queue.push({ DBRequest::SAVE_REDIS, id_ });
 							}
-							SendStatChangePacket();
+							SendStatChangePacket();  // 공격자 경험치/레벨 갱신
+
+							// 사망 패킷 + 제거 처리
 							for (auto& view_list : objects[id]->view_list_)
 							{
 								objects[view_list]->SendAttackPacket(id_, objects[id]->id_, getting_exp, p->attack_type, p->attack_direction);
-							}
-
-							// Npc의 어그로리스트에 있는 Player들에게만 전송
-							for (auto& view_list : objects[id]->view_list_)
-							{
 								objects[view_list]->SendRemoveObjectPacket(id);
 							}
 						}
-						
+						else
+						{
+							// 피격 객체 생존시 데미지 패킷만 전송
+							for (auto& view_list : objects[id]->view_list_)
+							{
+								objects[view_list]->SendAttackPacket(id_, objects[id]->id_, 0, p->attack_type, p->attack_direction);
+							}
+						}
 							
 					}
 				}
@@ -697,7 +724,7 @@ void Player::ProcessPacket(char* packet)
 		{
 			// 쿨타임 체크 (3초) - 모두다 요청
 			auto now = std::chrono::system_clock::now();
-			if (now - last_rank_req_time_ < std::chrono::seconds(3)) return;
+			if (now - last_rank_req_time_ < std::chrono::seconds(3)) break;
 			last_rank_req_time_ = now;
 
 			// 매니저에게 전송 요청 (DB/Redis 조회 없이, 메모리에서 바로 줌)
@@ -720,53 +747,45 @@ void Player::ProcessPacket(char* packet)
 		case CS_ITEM_DROP:
 		{
 			CS_ITEM_DROP_PACKET* p = reinterpret_cast<CS_ITEM_DROP_PACKET*>(packet);
-			// 1. 인벤토리에서 제거 (성공 시 아이템 정보를 리턴받으면 좋겠지만, 일단 찾아서 제거)
-			// 현재 구조상 RemoveItem이 삭제만 하고 정보를 안 주므로, FindItem 먼저 호출
-			// 하지만 Inventory::FindItem 기능이 없음. items_ 맵에 접근해야 함.
-			// Inventory::RemoveItem이 성공하면 MapItem 생성
-			// (안전하게 하려면 Inventory 수정이 필요하지만, 여기선 items_ 접근 가능하다고 가정하거나 함수 추가)
-			
-			// 임시: Inventory::RemoveItem 호출 전 아이템 정보 확인 로직 필요
-			// 간단하게:
+
 			int map_id = GetNewMapItemId();
-			if (map_id != -1) 
+			if (map_id == -1) break;
+
+			Item* droppedItem = inventory_->RemoveItem(p->item_uid);
+			if (!droppedItem) break;  // 인벤에 없는 아이템
+
+			MapItem* mapItem = dynamic_cast<MapItem*>(objects[map_id].get());
+			if (!mapItem)
+			{ 
+				delete droppedItem; 
+				break;
+			}
+
+			mapItem->id_ = map_id;
+			mapItem->x_ = x_;
+			mapItem->y_ = y_;
+			mapItem->item_uid = droppedItem->item_uid;
+			mapItem->template_id = droppedItem->template_id; 
+			mapItem->count = droppedItem->count;
+			mapItem->state_ = OS_INGAME;
+			mapItem->PutInSector();
+
+			delete droppedItem;	// 원본 삭제
+
+			for (auto& sector : mapItem->around_sector_)
 			{
-				if (inventory_->RemoveItem(p->item_uid))
+				std::lock_guard<std::mutex> sec_l(g_ObjectSector[sector].mut_sector_);
+				for (auto& pid : g_ObjectSector[sector].sec_id_)
 				{
-					// 2. MapItem 생성
-					MapItem* mapItem = dynamic_cast<MapItem*>(objects[map_id].get());
-					mapItem->id_ = map_id;
-					mapItem->x_ = x_;
-					mapItem->y_ = y_;
-					mapItem->item_uid = p->item_uid;
-					mapItem->template_id = 1001; // TODO: 실제 템플릿 ID 필요 (RemoveItem에서 리턴받아야 함)
-					mapItem->count = 1; // TODO
-					mapItem->state_ = OS_INGAME;
-					mapItem->PutInSector();
-					
-					// 주변 플레이어에게 알림
-					for (auto& sector : mapItem->around_sector_) 
-					{
-						std::lock_guard<std::mutex> sec_l(g_ObjectSector[sector].mut_sector_);
-						for (auto& pid : g_ObjectSector[sector].sec_id_)
-						{
-							if (true == IsPlayer(pid)) 
-							{
-								// 거리 체크
-								if (true == CanSee(mapItem->id_, pid)) 
-								{
-									mapItem->SendAddObjectPacket(pid);
-								}
-							}
-						}
-					}
-					
-					SaveInventoryToRedis(); // 변경 사항 저장
+					if (IsPlayer(pid) && CanSee(mapItem->id_, pid))
+						mapItem->SendAddObjectPacket(pid);
 				}
 			}
+
+			SaveInventoryToRedis();
 			break;
 		}
-		// 아이템 줍기 (바람의 나라 스타일: 내 발밑 최신 아이템)
+		// 아이템 줍기
 		case CS_ITEM_PICKUP:
 		{
 			MapItem* target = nullptr;
@@ -806,6 +825,9 @@ void Player::ProcessPacket(char* packet)
 				{
 					// 맵에서 제거
 					int target_id = target->id_;
+
+					// 인벤토리에 들어간 위치(x,y)가 확정된 직후 바로 전송
+					SendGetItemPacket(newItem);
 					
 					// 주변에 제거 알림
 					for (auto& sector : target->around_sector_) 

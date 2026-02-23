@@ -1,4 +1,4 @@
-#pragma once
+ï»¿#pragma once
 #include "Session.h"
 
 class Npc : public SESSION
@@ -22,7 +22,7 @@ public:
 	void SendRemoveObjectPacket(int c_id);
 	void SendAttackPacket(int attacker_id, int damaged_id, int exp);
 
-	// npc ÁÖº¯¿¡ ÇÃ·¹ÀÌ¾î°¡ ÀÖ´ÂÁö °Ë»çÇÏ´Â ÇÔ¼ö
+	// npc ì£¼ë³€ì— í”Œë ˆì´ì–´ê°€ ìˆëŠ”ì§€ ê²€ì‚¬í•˜ëŠ” í•¨ìˆ˜
 	bool IsPlayerExist();
 	void WakeUpNpc(int p_id);
 	int GetNearestPlayerId();
@@ -31,6 +31,9 @@ public:
 	void DoMove(int target_id);
 	void Move(int dir);
 
-	// ¿ø·¡ À§Ä¡ ÁöÁ¤
+	// ì‹œì‘ ìœ„ì¹˜ ì €ì¥
 	void SetStartPos(int x, int y) { start_x_ = x; start_y_ = y; }
+
+	// ì•„ì´í…œ ë“œë¡­
+	void DropItem();
 };

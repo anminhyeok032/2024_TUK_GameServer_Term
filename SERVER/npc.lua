@@ -1,5 +1,5 @@
-myid = 99999
--- ¹æÇâ »ó¼ö Á¤ÀÇ (C++ enum°ú ¸ÂÃç¾ß ÇÔ)
+ï»¿myid = 99999
+-- ë°©í–¥ ìƒìˆ˜ ì •ì˜ (C++ enumê³¼ ë§ì¶°ì•¼ í•¨)
 local DIR_UP = 0
 local DIR_DOWN = 1
 local DIR_LEFT = 2
@@ -10,22 +10,22 @@ function set_uid(x)
 end
 
 function event_player_search(player)
-    -- ÁÂÇ¥ °¡Á®¿À±â
+    -- ì¢Œí‘œ ê°€ì ¸ì˜¤ê¸°
     local p_x, p_y = API_get_xy(player)
     local my_x, my_y = API_get_xy(myid)
 
-    -- °Å¸® Â÷ÀÌ °è»ê
+    -- ê±°ë¦¬ ì°¨ì´ ê³„ì‚°
     local diff_x = p_x - my_x
     local diff_y = p_y - my_y
 
-    -- ¹Ù·Î ¿·(°ø°İ »ç°Å¸®)ÀÎÁö È®ÀÎ (»óÇÏÁÂ¿ì 1Ä­)
+    -- ë°”ë¡œ ì˜†(ê³µê²© ì‚¬ê±°ë¦¬)ì¸ì§€ í™•ì¸ (ìƒí•˜ì¢Œìš° 1ì¹¸)
     if (math.abs(diff_x) + math.abs(diff_y)) <= 1 then
         API_Attack(myid, player)
-        return -- °ø°İÇßÀ¸¸é ÀÌµ¿ÇÏÁö ¾Ê°í Á¾·á
+        return -- ê³µê²©í–ˆìœ¼ë©´ ì´ë™í•˜ì§€ ì•Šê³  ì¢…ë£Œ
     end
 
-    -- ÃßÀû ·ÎÁ÷ (ÀÌµ¿)
-    -- XÃà °Å¸®°¡ YÃà °Å¸®º¸´Ù ¸Ö¸é XÃàÀ¸·Î ¸ÕÀú ÀÌµ¿, ¾Æ´Ï¸é YÃà ÀÌµ¿
+    -- ì¶”ì  ë¡œì§ (ì´ë™)
+    -- Xì¶• ê±°ë¦¬ê°€ Yì¶• ê±°ë¦¬ë³´ë‹¤ ë©€ë©´ Xì¶•ìœ¼ë¡œ ë¨¼ì € ì´ë™, ì•„ë‹ˆë©´ Yì¶• ì´ë™
     if math.abs(diff_x) > math.abs(diff_y) then
         if diff_x > 0 then
             API_Move(myid, DIR_RIGHT)
