@@ -43,6 +43,7 @@ public:
 	
 	void SendStatChangePacket() override;
 	void SendGetItemPacket(Item* item);
+	void SendInventorySyncPacket(); // 로그인 시 인벤토리 전체 동기화
 
 	void DBLogin(SQLHDBC& hdbc) override;
 	void DBLogout(SQLHDBC& hdbc) override;

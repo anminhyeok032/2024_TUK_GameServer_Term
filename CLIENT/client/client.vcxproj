@@ -135,12 +135,17 @@
     <ClCompile Include="client.cpp" />
     <ClCompile Include="GameManager.cpp" />
     <ClCompile Include="InventoryUI.cpp" />
+    <ClCompile Include="ItemDatabase.cpp" />
+    <ClCompile Include="ItemSpriteSheet.cpp" />
     <ClCompile Include="Object.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="client\ItemSpriteTable.h" />
     <ClInclude Include="Constants.h" />
     <ClInclude Include="GameManager.h" />
     <ClInclude Include="InventoryUI.h" />
+    <ClInclude Include="ItemDatabase.h" />
+    <ClInclude Include="ItemSpriteSheet.h" />
     <ClInclude Include="Object.h" />
     <ClInclude Include="protocol.h" />
   </ItemGroup>

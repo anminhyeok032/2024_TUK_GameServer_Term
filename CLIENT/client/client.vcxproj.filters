@@ -14,6 +14,9 @@
     <Filter Include="Game\System">
       <UniqueIdentifier>{1702f32c-3a32-4e44-84fb-4f3317c2f746}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Game\Item">
+      <UniqueIdentifier>{b692f033-aa9e-4baa-99b3-836b77f9533f}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="client.cpp">
@@ -27,6 +30,12 @@
     </ClCompile>
     <ClCompile Include="Object.cpp">
       <Filter>Game\Object</Filter>
+    </ClCompile>
+    <ClCompile Include="ItemDatabase.cpp">
+      <Filter>Game\Item</Filter>
+    </ClCompile>
+    <ClCompile Include="ItemSpriteSheet.cpp">
+      <Filter>Game\Item</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -44,6 +53,13 @@
     </ClInclude>
     <ClInclude Include="Object.h">
       <Filter>Game\Object</Filter>
+    </ClInclude>
+    <ClInclude Include="client\ItemSpriteTable.h" />
+    <ClInclude Include="ItemDatabase.h">
+      <Filter>Game\Item</Filter>
+    </ClInclude>
+    <ClInclude Include="ItemSpriteSheet.h">
+      <Filter>Game\Item</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

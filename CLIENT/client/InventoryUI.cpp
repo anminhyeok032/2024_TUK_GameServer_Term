@@ -1,10 +1,46 @@
 ﻿#include "InventoryUI.h"
+#include "ItemSpriteSheet.h"
 #include <iostream>
 
 // 전역 패킷 전송 함수 (외부 client.cpp 등에 정의된 것 사용)
 extern void send_packet(void* packet);
 
 InventoryUI g_inventoryUI;
+
+static void DrawItemSprite(sf::RenderWindow* window,
+	const std::string& sprite_id,
+	float slotX, float slotY,
+	float drawW, float drawH,
+	bool is_rotated,
+	sf::Uint8 alpha = 255)
+{
+	sf::Sprite sprite = ItemSpriteSheet::GetInstance().GetSprite(sprite_id);
+	const SpriteRect* r = ItemSpriteSheet::GetInstance().GetRect(sprite_id);
+	if (!r || r->w <= 0 || r->h <= 0) return;
+
+	sprite.setColor(sf::Color(255, 255, 255, alpha));
+
+	if (!is_rotated)
+	{
+		// 슬롯 크기에 맞게 스케일 조정
+		sprite.setScale(drawW / r->w, drawH / r->h);
+		sprite.setPosition(slotX, slotY);
+	}
+	else
+	{
+		// 90° CW 회전 시:
+		//   화면상 가로 = 원본 세로 * scaleY = drawW
+		//   화면상 세로 = 원본 가로 * scaleX = drawH
+		float sx = drawH / r->w;
+		float sy = drawW / r->h;
+		sprite.setScale(sx, sy);
+		sprite.setRotation(90.f);
+		// 위치 보정: 회전 후 좌상단이 슬롯 좌상단에 오도록
+		sprite.setPosition(slotX + drawW, slotY);
+	}
+
+	window->draw(sprite);
+}
 
 InventoryUI::InventoryUI()
 	: window_(nullptr), font_(nullptr), isActive_(false), isDragging_(false), draggingItemUID_(-1), isDirty_(false)
@@ -21,6 +57,7 @@ void InventoryUI::Initialize(sf::RenderWindow* window, sf::Font* font)
 {
 	window_ = window;
 	font_ = font;
+	// 아이템은 서버로부터 SC_GET_ITEM 패킷을 받아 AddItem()으로 추가됨
 }
 
 void InventoryUI::Toggle()
@@ -34,9 +71,9 @@ void InventoryUI::Toggle()
 
 ClientItemTemplate InventoryUI::GetItemTemplate(int tid)
 {
-	if (tid == 1001) return { 2, 3 }; // 대검
-	if (tid == 1002) return { 2, 2 }; // 방패
-	return { 1, 1 };
+	const ItemInfo* info = ItemDatabase::GetInstance().Get(tid);
+	if (!info) return { 1, 1, "", "" };
+	return { info->grid_w, info->grid_h, info->sprite_id, info->name };
 }
 
 ClientItem* InventoryUI::FindItem(long long uid)
@@ -84,7 +121,7 @@ void InventoryUI::RemoveItem(long long uid)
 {
 	for (auto it = myItems_.begin(); it != myItems_.end(); ++it)
 	{
-		if (it->item_uid == uid) 
+		if (it->item_uid == uid)
 		{
 			myItems_.erase(it);
 			break;
@@ -120,7 +157,7 @@ void InventoryUI::SyncToServer()
 
 void InventoryUI::UpdateSync()
 {
-	if (!isDirty_) return;
+	if (!isActive_) return;
 	auto now = std::chrono::system_clock::now();
 	if (now - lastSyncTime_ > std::chrono::seconds(5)) {
 		SyncToServer();
@@ -178,9 +215,9 @@ void InventoryUI::HandleInput(sf::Event& event)
 				}
 				else {
 					// 인벤토리 영역 밖으로 드롭 -> 아이템 버리기
-					sf::FloatRect invRect((float)UI_X, (float)UI_Y, 
+					sf::FloatRect invRect((float)UI_X, (float)UI_Y,
 						(float)(INV_MAX_COL * SLOT_SIZE + 20), (float)(INV_MAX_ROW * SLOT_SIZE + 40));
-					
+
 					if (!invRect.contains((float)mousePos.x, (float)mousePos.y)) {
 						// 버리기 패킷 전송
 						CS_ITEM_DROP_PACKET p;
@@ -269,7 +306,6 @@ void InventoryUI::Draw()
 
 	// 아이템 그리기
 	sf::RectangleShape itemBox;
-	itemBox.setFillColor(sf::Color::Red);
 	itemBox.setOutlineColor(sf::Color::Yellow);
 	itemBox.setOutlineThickness(1);
 
@@ -283,9 +319,25 @@ void InventoryUI::Draw()
 		int w = item.is_rotated ? info.h : info.w;
 		int h = item.is_rotated ? info.w : info.h;
 
-		itemBox.setSize(sf::Vector2f(w * SLOT_SIZE - MARGIN * 2.f, h * SLOT_SIZE - MARGIN * 2.f));
-		itemBox.setPosition(itemX + MARGIN, itemY + MARGIN);
-		window_->draw(itemBox);
+		float drawW = w * SLOT_SIZE - MARGIN * 2.f;
+		float drawH = h * SLOT_SIZE - MARGIN * 2.f;
+
+		if (!info.sprite_id.empty() && ItemSpriteSheet::GetInstance().IsLoaded())
+		{
+			DrawItemSprite(window_,
+				info.sprite_id,
+				itemX + MARGIN, itemY + MARGIN,
+				drawW, drawH,
+				item.is_rotated);
+		}
+		else
+		{
+			// fallback: 회색 사각형
+			itemBox.setFillColor(sf::Color(100, 100, 100, 200));
+			itemBox.setSize(sf::Vector2f(drawW, drawH));
+			itemBox.setPosition(itemX + MARGIN, itemY + MARGIN);
+			window_->draw(itemBox);
+		}
 	}
 
 	// 드래그 중인 아이템
@@ -300,10 +352,27 @@ void InventoryUI::Draw()
 			int w = item->is_rotated ? info.h : info.w;
 			int h = item->is_rotated ? info.w : info.h;
 
-			itemBox.setFillColor(sf::Color(255, 0, 0, 180));
-			itemBox.setSize(sf::Vector2f(w * SLOT_SIZE - MARGIN * 2.f, h * SLOT_SIZE - MARGIN * 2.f));
-			itemBox.setPosition(drawX + MARGIN, drawY + MARGIN);
-			window_->draw(itemBox);
+			float drawW = w * SLOT_SIZE - MARGIN * 2.f;
+			float drawH = h * SLOT_SIZE - MARGIN * 2.f;
+
+			if (!info.sprite_id.empty() && ItemSpriteSheet::GetInstance().IsLoaded())
+			{
+				// 드래그 중: 반투명 (alpha=180)
+				DrawItemSprite(window_,
+					info.sprite_id,
+					drawX + MARGIN, drawY + MARGIN,
+					drawW, drawH,
+					item->is_rotated,
+					180);
+			}
+			else
+			{
+				// fallback
+				itemBox.setFillColor(sf::Color(100, 100, 100, 130));
+				itemBox.setSize(sf::Vector2f(drawW, drawH));
+				itemBox.setPosition(drawX + MARGIN, drawY + MARGIN);
+				window_->draw(itemBox);
+			}
 		}
 	}
 }

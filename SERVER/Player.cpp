@@ -192,6 +192,46 @@ void Player::SendGetItemPacket(Item* item)
 	DoSend(&packet);
 }
 
+void Player::SendInventorySyncPacket()
+{
+	if (!inventory_) return;
+
+	auto inv_data = inventory_->GetInventoryDataForRedis();
+	int item_count = static_cast<int>(inv_data.size());
+
+	// 가변 크기 패킷 동적 할당
+	// 실제 size = 헤더(size+type+count) + InventorySlot * item_count
+	int base_size = offsetof(SC_INVENTORY_SYNC_PACKET, items); // size + type + item_count
+	int total_size = base_size + sizeof(InventorySlot) * item_count;
+
+	std::vector<char> buf(total_size, 0);
+	SC_INVENTORY_SYNC_PACKET* packet = reinterpret_cast<SC_INVENTORY_SYNC_PACKET*>(buf.data());
+	packet->size = static_cast<unsigned short>(total_size);
+	packet->type = SC_INVENTORY_SYNC;
+	packet->item_count = item_count;
+
+	int idx = 0;
+	for (auto& pair : inv_data)
+	{
+		int tid, cnt, x, y, rot;
+		if (sscanf_s(pair.second.c_str(), "%d:%d:%d:%d:%d", &tid, &cnt, &x, &y, &rot) == 5)
+		{
+			InventorySlot& slot = packet->items[idx++];
+			slot.item_uid   = std::stoll(pair.first);
+			slot.template_id = tid;
+			slot.count       = cnt;
+			slot.x           = (short)x;
+			slot.y           = (short)y;
+			slot.is_rotated  = (bool)rot;
+		}
+	}
+	// 실제 파싱된 개수로 보정
+	packet->item_count = idx;
+	packet->size = static_cast<unsigned short>(base_size + sizeof(InventorySlot) * idx);
+
+	DoSend(packet);
+}
+
 void Player::DBLogin(SQLHDBC& hdbc)
 {
 	SQLHSTMT hstmt = AllocateStatement(hdbc);
@@ -303,6 +343,10 @@ void Player::DBLogin(SQLHDBC& hdbc)
 		// Login 패킷 전송
 		//===============
 		SendLoginInfoPacket();
+
+		// 인벤토리 전체를 패킷 1개로 한 번에 동기화
+		SendInventorySyncPacket();
+
 		// 자신의 위치 섹터에 넣기
 		PutInSector();
 		// 해당 객체 INGAME 상태로 변경
@@ -447,7 +491,11 @@ int GetNewMapItemId()
 		else
 		{
 			std::lock_guard<std::mutex> ll(objects[i]->mut_state_);
-			if (objects[i]->state_ == OS_FREE) return i;
+			if (objects[i]->state_ == OS_FREE)
+			{
+				objects[i]->view_list_.clear();
+				return i;
+			}
 		}
 	}
 	return -1;

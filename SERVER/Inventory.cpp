@@ -29,15 +29,42 @@ ItemTemplate Inventory::GetItemTemplate(int template_id)
 	info.template_id = template_id;
 	info.width = 1; 
 	info.height = 1;
-	// 테스트용: 1001번은 2x3 크기의 대검
-	if (template_id == 1001) 
+
+	switch (template_id)
 	{
-		info.width = 2; info.height = 3;
-	}
-	// 테스트용: 1002번은 2x2 방패
-	if (template_id == 1002)
-	{
-		info.width = 2; info.height = 2;
+		// ---- 2x3 ----
+	case 1001:                          // 대검
+		info.width = 2; info.height = 3; break;
+
+		// ---- 2x2 ----
+	case 1002:                          // 방패
+		info.width = 2; info.height = 2; break;
+
+		// ---- 1x2 ----
+	case 1003:                          // 장검
+	case 1004:                          // 단검
+	case 1005:                          // 창
+	case 1006:                          // 단창
+		info.width = 1; info.height = 2; break;
+
+		// ---- 2x1 ----
+	case 1013:                          // 완드
+	case 1014:                          // 막대
+		info.width = 2; info.height = 1; break;
+
+		// ---- 1x1 (기본값과 동일, 명시적 나열) ----
+	case 1007:                          // 표창
+	case 1008:                          // 단도
+	case 1009:                          // 곡검
+	case 1010:                          // 송곳
+	case 1011:                          // 바늘
+	case 1012:                          // 건틀릿
+	case 1015:                          // 부적
+	case 1016:                          // 반지
+	case 1017:                          // 메달
+	case 1018:                          // 구슬
+	case 1019:                          // 핀
+		info.width = 1; info.height = 1; break;
 	}
 	return info;
 }

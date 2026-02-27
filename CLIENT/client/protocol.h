@@ -26,6 +26,7 @@ constexpr char SC_ITEM_MOVE_RESULT = 11; // 아이템 이동 결과
 constexpr char SC_ADD_MAP_ITEM = 12;     // 필드 아이템 생성 알림
 constexpr char SC_REMOVE_MAP_ITEM = 13;  // 필드 아이템 삭제 알림
 constexpr char SC_GET_ITEM = 14;         // 아이템 획득 알림 (인벤토리 추가)
+constexpr char SC_INVENTORY_SYNC = 15;   // 로그인 시 인벤토리 전체 동기화
 
 #pragma pack (push, 1)
 
@@ -220,8 +221,25 @@ struct SC_GET_ITEM_PACKET {
 	long long item_uid;
 	int template_id;
 	int count;
-	short x, y; // 인벤토리 어느 칸에 들어왔는지
+	short x, y;
 	bool is_rotated;
+};
+
+// 인벤토리 단일 슬롯 데이터 (SC_INVENTORY_SYNC 내부 배열용)
+struct InventorySlot {
+	long long item_uid;
+	int template_id;
+	int count;
+	short x, y;
+	bool is_rotated;
+};
+
+// 로그인 시 인벤토리 전체 동기화 패킷 (가변 크기)
+struct SC_INVENTORY_SYNC_PACKET {
+	unsigned short size;
+	char type;
+	int item_count;
+	InventorySlot items[1]; // 가변 배열
 };
 
 #pragma pack (pop)

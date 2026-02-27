@@ -300,6 +300,7 @@ void Npc::DropItem()
 			mapItem->template_id = dropTemplateId;
 			mapItem->count = 1;
 			mapItem->state_ = OS_INGAME;
+			mapItem->drop_time = std::chrono::system_clock::now();
 			mapItem->PutInSector();
 
 			// 주변 플레이어에게 알림

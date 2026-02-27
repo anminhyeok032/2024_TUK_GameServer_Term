@@ -1,10 +1,11 @@
 ﻿#pragma once
 #include <SFML/Graphics.hpp>
 #include <vector>
-#include <set> // set 헤더 추가
+#include <set>
 #include <chrono>
 #include "Constants.h"
 #include "protocol.h"
+#include "ItemDatabase.h"
 
 // [Inventory UI System]
 // 인벤토리 화면 그리기, 마우스 입력 처리, 서버 동기화(Lazy Sync)를 담당
@@ -20,7 +21,9 @@ struct ClientItem {
 
 // 아이템 크기 정보
 struct ClientItemTemplate {
-	int w, h;
+	int         w, h;        // 인벤토리 grid 크기
+	std::string sprite_id;   // ItemSpriteSheet 키
+	std::string name;        // 표시 이름
 };
 
 class InventoryUI
