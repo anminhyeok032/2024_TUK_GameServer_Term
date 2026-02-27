@@ -329,6 +329,10 @@ void Player::DBLogin(SQLHDBC& hdbc)
 					// MapItem 처리 추가
 					if (true == IsMapItem(objects[id]->id_)) 
 					{
+						// 내 view_list_에 MapItem 추가 후 패킷 전송
+						mut_view_.lock();
+						view_list_.insert(objects[id]->id_);
+						mut_view_.unlock();
 						objects[id]->SendAddObjectPacket(id_); // MapItem -> Me
 					} 
 					else 
@@ -405,10 +409,10 @@ void Player::DBLogout(SQLHDBC& hdbc)
 		DisplayDBError(hstmt, SQL_HANDLE_STMT, retcode);
 	}
 
-	SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
+	SQLFreeHandle(SQL_HANDLE_STMT, hdbc);
 }
 
-void Player::SendAttackPacket(int attacker_id, int damaged_id, int exp, char attack_type, char direction)
+void Player::SendAttackPacket(int attacker_id, int damaged_id, int exp, char attack_type, char direction, int damage)
 {
 	SC_ATTACK_PACKET packet;
 	packet.size = sizeof(SC_ATTACK_PACKET);
@@ -418,7 +422,7 @@ void Player::SendAttackPacket(int attacker_id, int damaged_id, int exp, char att
 	packet.max_hp = objects[damaged_id]->max_hp_;
 	packet.hp = objects[damaged_id]->hp_;
 	packet.exp = exp;
-	
+	packet.damage = damage;
 	packet.attack_type = attack_type;
 	packet.direction = direction;
 	packet.center_x = objects[attacker_id]->x_;
@@ -532,6 +536,10 @@ void Player::ProcessPacket(char* packet)
 					// MapItem 처리
 					if (true == IsMapItem(ano_id)) 
 					{
+						// 내 view_list_에 MapItem 추가 후 패킷 전송
+						mut_view_.lock();
+						view_list_.insert(ano_id);
+						mut_view_.unlock();
 						objects[ano_id]->SendAddObjectPacket(id_);
 					} 
 					else 
@@ -552,6 +560,10 @@ void Player::ProcessPacket(char* packet)
 					// MapItem 처리
 					if (true == IsMapItem(ano_id))
 					{
+						// 내 view_list_에서 MapItem 제거 후 패킷 전송
+						mut_view_.lock();
+						view_list_.erase(ano_id);
+						mut_view_.unlock();
 						objects[ano_id]->SendRemoveObjectPacket(id_);
 					} 
 					else
@@ -595,8 +607,24 @@ void Player::ProcessPacket(char* packet)
 			std::vector<std::pair<short, short>> attack_coord;
 			short attack_x = x_;
 			short attack_y = y_;
-			// 기본 공격 피해량은 10, 범위공격 피해량은 5
-			int damage = 10;
+
+			// AttackType enum class로 타입 캐스팅
+			AttackType attack_type = static_cast<AttackType>(p->attack_type);
+
+			// 공격 타입별 데미지 계산
+			int damage = 0;
+			switch (attack_type)
+			{
+			case AttackType::NORMAL:
+				damage = level_ * 3; // 단방향 평타: 레벨 * 3
+				break;
+			case AttackType::AOE:
+				damage = level_ * 2; // 범위 공격: 레벨 * 2
+				break;
+			default:
+				damage = level_ * 3; // 일단 알 수 없는 타입은 평타 취급
+				break;
+			}
 
 			switch (p->attack_direction) {
 			case 0:		// UP
@@ -636,7 +664,6 @@ void Player::ProcessPacket(char* packet)
 				std::make_pair(-1, 0),  // LEFT
 				std::make_pair(1, 0)    // RIGHT
 				};
-				damage = 5;
 				for (const auto& direction : directions)
 				{
 					short x = attack_x + direction.first;
@@ -682,7 +709,6 @@ void Player::ProcessPacket(char* packet)
 								objects[id]->hp_ = 0;
 								objects[id]->state_ = OS_DEAD;
 
-								// NPC라면 아이템 드롭 시도
 								dead_npc_ids.push_back(id);
 
 								int getting_exp = objects[id]->level_ * objects[id]->level_ * 2;
@@ -695,24 +721,23 @@ void Player::ProcessPacket(char* packet)
 									std::cout << "Level up - " << level_ << "!" << std::endl;
 									g_db_request_queue.push({ DBRequest::SAVE_REDIS, id_ });
 								}
-								SendStatChangePacket();  // 공격자 경험치/레벨 갱신
+								SendStatChangePacket();
 
-								// 사망 패킷 + 제거 처리
+								// 사망 패킷 + 제거 처리 (damage는 0 - 이미 죽었으므로)
 								for (auto& view_list : objects[id]->view_list_)
 								{
-									objects[view_list]->SendAttackPacket(id_, objects[id]->id_, getting_exp, p->attack_type, p->attack_direction);
+									objects[view_list]->SendAttackPacket(id_, objects[id]->id_, getting_exp, p->attack_type, p->attack_direction, 0);
 									objects[view_list]->SendRemoveObjectPacket(id);
 								}
 							}
 							else
 							{
-								// 피격 객체 생존시 데미지 패킷만 전송
+								// 피격 객체 생존시 데미지 패킷 전송 (실제 데미지 전달)
 								for (auto& view_list : objects[id]->view_list_)
 								{
-									objects[view_list]->SendAttackPacket(id_, objects[id]->id_, 0, p->attack_type, p->attack_direction);
+									objects[view_list]->SendAttackPacket(id_, objects[id]->id_, 0, p->attack_type, p->attack_direction, damage);
 								}
 							}
-
 						}
 					}
 				}

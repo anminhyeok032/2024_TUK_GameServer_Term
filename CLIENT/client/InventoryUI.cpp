@@ -21,10 +21,6 @@ void InventoryUI::Initialize(sf::RenderWindow* window, sf::Font* font)
 {
 	window_ = window;
 	font_ = font;
-
-	// [테스트] 더미 아이템 추가
-	AddItem(1, 1001, 1, 0, 0, false);
-	AddItem(2, 1002, 1, 5, 5, false);
 }
 
 void InventoryUI::Toggle()
@@ -124,7 +120,7 @@ void InventoryUI::SyncToServer()
 
 void InventoryUI::UpdateSync()
 {
-	if (!isActive_) return;
+	if (!isDirty_) return;
 	auto now = std::chrono::system_clock::now();
 	if (now - lastSyncTime_ > std::chrono::seconds(5)) {
 		SyncToServer();

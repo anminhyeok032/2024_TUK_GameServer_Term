@@ -9,7 +9,7 @@ constexpr char CS_ATTACK = 3;			// 4 방향 공격
 constexpr char CS_TELEPORT = 4;			// RANDOM한 위치로 Teleport, Stress Test때 핫스팟으로 이동하기 위해 사용
 constexpr char CS_LOGOUT = 5;			// 클라이언트에서 정상적으로 종료를 알리는 패킷
 constexpr char CS_RANKING_REQ = 6;
-constexpr char CS_ITEM_MOVE = 7;		// 아이템 이동 요청
+constexpr char CS_ITEM_MOVE = 7;
 constexpr char CS_ITEM_DROP = 8;        // 아이템 버리기 요청
 constexpr char CS_ITEM_PICKUP = 9;      // 아이템 줍기 요청
 
@@ -167,7 +167,8 @@ struct SC_ATTACK_PACKET {
 	int		max_hp;
 	int		hp;
 	int     exp;
-	
+	int		damage;	
+
 	// 공격 시각화를 위한 정보
 	char	attack_type;	// 0: 평타, 1: 범위공격
 	char	direction;		// 평타일 때 방향 (0:UP, 1:DOWN, 2:LEFT, 3:RIGHT)

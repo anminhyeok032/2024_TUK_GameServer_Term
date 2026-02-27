@@ -104,6 +104,17 @@ enum OBJECT_STATE
 	OS_DEAD
 };
 
+// 공격 타입 정의
+// 데미지 공식: NORMAL = 레벨 * 3, AOE = 레벨 * 2
+enum class AttackType : char
+{
+	NORMAL = 0,		// 단방향 평타 (레벨 * 3 데미지)
+	AOE    = 1,		// 4방향 범위 공격 (레벨 * 2 데미지)
+	// 추후 스킬 추가 시 여기에 확장
+	// SKILL_FIRE = 2,
+	// SKILL_ICE  = 3,
+};
+
 enum OBJECT_TYPE
 {
 	OT_PLAYER = 0,

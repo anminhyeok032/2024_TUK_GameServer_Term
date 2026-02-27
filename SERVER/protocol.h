@@ -167,6 +167,7 @@ struct SC_ATTACK_PACKET {
 	int		max_hp;
 	int		hp;
 	int     exp;
+	int		damage;
 	
 	// 공격 시각화를 위한 정보
 	char	attack_type;	// 0: 평타, 1: 범위공격

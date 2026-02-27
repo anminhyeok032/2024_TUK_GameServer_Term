@@ -59,8 +59,8 @@ public:
 	virtual void SendChatPacket(int c_id, char mess[CHAT_SIZE]) {}
 	virtual void SendStatChangePacket() {};
 	
-	// 공격 패킷 인자 추가 (시각화용)
-	virtual void SendAttackPacket(int attacker_id, int damaged_id, int exp, char attack_type, char direction) {}
+	// 공격 패킷 인자 추가 (시각화용, damage 추가)
+	virtual void SendAttackPacket(int attacker_id, int damaged_id, int exp, char attack_type, char direction, int damage) {}
 	
 	virtual void ProcessPacket(char* packet) {};
 

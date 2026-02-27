@@ -60,11 +60,15 @@ public:
     {
         // 객체가 max_size 이하일 때만 풀에 반환
         if (current_size_.load(std::memory_order_relaxed) <= max_size_)
+        {
             pool_.push(obj);
+        }
         // 객체 반환
         else
+        {
             delete obj;
             current_size_.fetch_sub(1, std::memory_order_relaxed);
+        }
     }
 
     // 주기적 Trim - max_size보다 많이 쌓인 경우 정리

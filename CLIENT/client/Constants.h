@@ -28,7 +28,7 @@ constexpr int INV_MAX_COL = 10;
 constexpr int INV_MAX_ROW = 10;
 
 
-constexpr int BUF_SIZE = 8192;
+constexpr int BUF_SIZE = 4096;
 
 // 클라이언트 화면 설정값
 constexpr auto SCREEN_WIDTH = 20;

@@ -156,6 +156,8 @@ void GameManager::Run()
 void GameManager::HandleInput()
 {
 	sf::Event event;
+	bool enterConsumed = false;
+
 	while (window_->pollEvent(event))
 	{
 		if (event.type == sf::Event::Closed) window_->close();
@@ -240,11 +242,13 @@ void GameManager::HandleInput()
 				} else {
 					isChatActive_ = true;
 				}
+
+				enterConsumed = true;
 			}
 		}
 
 		// 채팅 입력
-		if (isChatActive_ && event.type == sf::Event::TextEntered) {
+		if (!enterConsumed && isChatActive_ && event.type == sf::Event::TextEntered) {
 			if (event.text.unicode == '\b') {
 				if (!chatInput_.empty()) chatInput_.pop_back();
 			} else if (event.text.unicode < 128 && event.text.unicode != '\r') {
@@ -282,6 +286,9 @@ void GameManager::ProcessPacket(char* ptr)
 			topY_ = p->y - SCREEN_HEIGHT / 2;
 			avatar_.show();
 		} else {
+			// visual == -1은 맵 아이템: SC_ADD_MAP_ITEM으로 별도 처리되므로 여기서 무시
+			if (p->visual == -1) break;
+
 			if (p->visual == 0) players_[p->id] = OBJECT{ *pieceTex_, 192, 0, 64, 64 };
 			else if (p->visual == 1) players_[p->id] = OBJECT{ *npcTex_, 128, 0, 64, 64 }; // Agro
 			else players_[p->id] = OBJECT{ *npcTex_, 0, 0, 64, 64 }; // Peace
@@ -311,14 +318,33 @@ void GameManager::ProcessPacket(char* ptr)
 	}
 	case SC_CHAT: {
 		SC_CHAT_PACKET* p = reinterpret_cast<SC_CHAT_PACKET*>(ptr);
-		if (p->id == myId_) avatar_.set_chat(p->mess, font_);
-		else players_[p->id].set_chat(p->mess, font_);
-		
-		string msg = "[" + string(players_[p->id].name) + "] : " + p->mess;
+		if (p->id == myId_) {
+			avatar_.set_chat(p->mess, font_);
+		}
+		else {
+			// players_에 있는 경우에만 set_chat 호출
+			if (players_.count(p->id)) {
+				players_[p->id].set_chat(p->mess, font_);
+			}
+		}
+
+		// 발신자 이름 안전 조회 (myId_면 avatar_, 없으면 Unknown)
+		string senderName;
+		if (p->id == myId_) {
+			senderName = string(avatar_.name);
+		}
+		else if (players_.count(p->id)) {
+			senderName = string(players_[p->id].name);
+		}
+		else {
+			senderName = "Unknown";
+		}
+
 		// 내 채팅은 Enter 키 입력 시 이미 추가했으므로 중복 추가 방지
 		if (p->id != myId_) {
+			string msg = "[" + senderName + "] : " + p->mess;
 			chatHistory_.push_back(msg);
-			if (chatHistory_.size() > 5) chatHistory_.erase(chatHistory_.begin());
+			if (chatHistory_.size() >= 5) chatHistory_.erase(chatHistory_.begin());
 		}
 		break;
 	}
@@ -335,8 +361,15 @@ void GameManager::ProcessPacket(char* ptr)
 	case SC_ATTACK: {
 		SC_ATTACK_PACKET* p = reinterpret_cast<SC_ATTACK_PACKET*>(ptr);
 		string msg;
-		int damage = 0;
-		if (players_.count(p->damaged_id)) damage = players_[p->damaged_id].hp - p->hp;
+
+		int damage = p->damage;
+
+		// 이름 안전 조회 헬퍼 람다
+		auto getName = [&](int id) -> string {
+			if (id == myId_) return string(avatar_.name);
+			if (players_.count(id)) return string(players_[id].name);
+			return "Unknown";
+		};
 
 		// 공격 이펙트 생성
 		auto now = chrono::system_clock::now();
@@ -362,13 +395,14 @@ void GameManager::ProcessPacket(char* ptr)
 
 		if (p->exp == 0) { // 공격
 			if (p->attacker_id == myId_) {
-				msg = "You attack " + string(players_[p->damaged_id].name) + " to give " + to_string(damage) + " damage.";
+				msg = "You attack " + getName(p->damaged_id) + " to give " + to_string(damage) + " damage.";
 			} else if (p->damaged_id == myId_) {
-				msg = string(players_[p->attacker_id].name) + " attack you to give " + to_string(damage) + " damage.";
+				msg = getName(p->attacker_id) + " attack you to give " + to_string(damage) + " damage.";
 			} else {
-				msg = string(players_[p->attacker_id].name) + " attack " + string(players_[p->damaged_id].name) + " to give " + to_string(damage) + " damage.";
+				msg = getName(p->attacker_id) + " attack " + getName(p->damaged_id) + " to give " + to_string(damage) + " damage.";
 			}
-			
+
+			// HP 갱신 (players_에 있는 경우만)
 			if (players_.count(p->damaged_id)) {
 				players_[p->damaged_id].hp = p->hp;
 				players_[p->damaged_id].hp_bar.setSize(sf::Vector2f(((float)p->hp / p->max_hp) * TILE_WIDTH, 5));
@@ -376,16 +410,16 @@ void GameManager::ProcessPacket(char* ptr)
 		} else { // 사망/킬
 			if (p->attacker_id == myId_) {
 				avatar_.exp += p->exp;
-				msg = "You killed " + string(players_[p->damaged_id].name) + " and get EXP : " + to_string(p->exp);
+				msg = "You killed " + getName(p->damaged_id) + " and get EXP : " + to_string(p->exp);
 			} else if (p->damaged_id == myId_) {
 				avatar_.exp -= avatar_.exp / 2;
-				msg = string(players_[p->attacker_id].name) + " killed you and lose EXP - " + to_string(avatar_.exp);
+				msg = getName(p->attacker_id) + " killed you and lose EXP - " + to_string(avatar_.exp);
 			} else {
-				msg = string(players_[p->attacker_id].name) + " killed " + string(players_[p->damaged_id].name) + " and get EXP - " + to_string(p->exp);
+				msg = getName(p->attacker_id) + " killed " + getName(p->damaged_id) + " and get EXP - " + to_string(p->exp);
 			}
 		}
 		chatHistory_.push_back(msg);
-		if (chatHistory_.size() > 5) chatHistory_.erase(chatHistory_.begin());
+		if (chatHistory_.size() >= 5) chatHistory_.erase(chatHistory_.begin());
 		break;
 	}
 	case SC_RANKING: {
@@ -420,10 +454,15 @@ void GameManager::ProcessPacket(char* ptr)
 	}
 	// 아이템 획득 (인벤토리 추가)
 	case SC_GET_ITEM: {
-		// 현재 서버가 이 패킷을 안 보내고(InventoryUI에서 관리), 
-		// 클라가 알아서 추가하는 구조라면 필요 없음.
-		// 하지만 서버가 "너 이거 먹었어" 하고 알려주는 게 확실함.
-		// 일단 비워둠.
+		SC_GET_ITEM_PACKET* p = reinterpret_cast<SC_GET_ITEM_PACKET*>(ptr);
+		g_inventoryUI.AddItem(
+			p->item_uid,
+			p->template_id,
+			p->count,
+			p->x,
+			p->y,
+			p->is_rotated
+		);
 		break;
 	}
 	}
@@ -438,13 +477,26 @@ void GameManager::ProcessData(char* net_buf, size_t io_byte)
 
 	while (0 != io_byte) {
 		if (0 == in_packet_size) {
-			if (io_byte + saved_packet_size < 2) {
+			// saved_packet_size > 0 이면 packet_buffer에 이미 첫 바이트가 있으므로
+			// packet_buffer + 미수신분을 합쳐서 패킷 크기를 읽어야 한다.
+			if (saved_packet_size + io_byte < 2) {
+				// 아직 2바이트도 안 됨 → 그냥 누적만
 				memcpy(packet_buffer + saved_packet_size, ptr, io_byte);
 				saved_packet_size += io_byte;
 				io_byte = 0;
 				break;
 			}
-			in_packet_size = reinterpret_cast<unsigned short*>(ptr)[0];
+			// packet_buffer에 남은 바이트 + 새 데이터를 합쳐 패킷 크기 계산
+			if (saved_packet_size == 0) {
+				// 누적 없음 → ptr에서 직접 읽기
+				in_packet_size = reinterpret_cast<unsigned short*>(ptr)[0];
+			}
+			else {
+				// 1바이트 누적 → packet_buffer[0] + ptr[0] 조합
+				unsigned char lo = static_cast<unsigned char>(packet_buffer[0]);
+				unsigned char hi = static_cast<unsigned char>(ptr[0]);
+				in_packet_size = static_cast<size_t>(lo) | (static_cast<size_t>(hi) << 8);
+			}
 		}
 		if (io_byte + saved_packet_size >= in_packet_size) {
 			memcpy(packet_buffer + saved_packet_size, ptr, in_packet_size - saved_packet_size);

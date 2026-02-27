@@ -38,8 +38,8 @@ public:
 	void SendRemoveObjectPacket(int c_id) override;
 	void SendChatPacket(int c_id, char mess[CHAT_SIZE]) override;
 	
-	// 공격 패킷 인자 추가 (attack_type, direction)
-	void SendAttackPacket(int attacker_id, int damaged_id, int exp, char attack_type, char direction) override;
+	// 공격 패킷 인자 추가 (attack_type, direction, damage)
+	void SendAttackPacket(int attacker_id, int damaged_id, int exp, char attack_type, char direction, int damage) override;
 	
 	void SendStatChangePacket() override;
 	void SendGetItemPacket(Item* item);
