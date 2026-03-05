@@ -107,6 +107,13 @@ bool InventoryUI::CanPlace(int startX, int startY, int w, int h, long long exclu
 
 void InventoryUI::AddItem(long long uid, int tid, int cnt, int x, int y, bool rot)
 {
+	// 중복 UID 방지 - 이미 있으면 무시
+	for (const auto& existing : myItems_) 
+	{
+		if (existing.item_uid == uid) return;
+	}
+	std::cout << "[InventoryUI] Adding item UID " << uid << " (template " << tid << ", count " << cnt << ") at (" << x << "," << y << "), rotated: " << rot << std::endl;
+
 	ClientItem item;
 	item.item_uid = uid;
 	item.template_id = tid;
@@ -133,7 +140,7 @@ void InventoryUI::SyncToServer()
 {
 	if (!isDirty_ || dirtyItemUIDs_.empty()) return;
 
-	//std::cout << "[Sync] Syncing " << dirtyItemUIDs_.size() << " changed items to server..." << std::endl;
+	std::cout << "[Sync] Syncing " << dirtyItemUIDs_.size() << " changed items to server..." << std::endl;
 
 	// 변경된 아이템만 골라서 패킷 전송
 	for (long long uid : dirtyItemUIDs_) {
@@ -226,12 +233,24 @@ void InventoryUI::HandleInput(sf::Event& event)
 						p.item_uid = draggingItemUID_;
 						send_packet(&p);
 
+						// 버리기 상태 메시지
+						ClientItemTemplate dropInfo = GetItemTemplate(item->template_id);
+						// ToSfString()으로 CP949 아이템 이름을 sf::String으로 변환
+						sf::String dropItemName = dropInfo.name.empty()
+							? sf::String("Unknown Item")
+							: ToSfString(dropInfo.name);
+						sf::String dropMsg = sf::String("[Item Drop] ") + dropItemName
+							+ " x" + std::to_string(item->count);
+						push_status_message(dropMsg);
+
 						// 클라이언트 인벤토리에서 즉시 제거
 						RemoveItem(draggingItemUID_);
 						// 버리기는 Dirty Sync 대상이 아니므로 즉시 처리됨
 					}
 					else {
 						// 인벤토리 내인데 공간이 없어서 못 놓는 경우 (원래 자리로)
+						sf::String Msg = ToSfString("아이템을 해당 부분에 놓을 수 없습니다.");
+						push_status_message(Msg);
 						//std::cout << "Can't place item there!" << std::endl;
 					}
 				}

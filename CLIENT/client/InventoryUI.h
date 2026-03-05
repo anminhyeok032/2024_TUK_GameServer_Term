@@ -3,9 +3,24 @@
 #include <vector>
 #include <set>
 #include <chrono>
+#include <string>
+#include <windows.h> // MultiByteToWideChar
 #include "Constants.h"
 #include "protocol.h"
 #include "ItemDatabase.h"
+
+// [CP949 → sf::String 변환 헬퍼]
+// Visual Studio 기본 저장 인코딩(CP949)으로 컴파일된 std::string을 sf::String으로 안전하게 변환
+// InventoryUI, GameManager 양쪽에서 공용으로 사용
+inline sf::String ToSfString(const std::string& cp949str)
+{
+	if (cp949str.empty()) return sf::String();
+	int wlen = MultiByteToWideChar(CP_ACP, 0, cp949str.c_str(), -1, nullptr, 0);
+	if (wlen <= 0) return sf::String(cp949str);
+	std::wstring wstr(wlen - 1, L'\0');
+	MultiByteToWideChar(CP_ACP, 0, cp949str.c_str(), -1, &wstr[0], wlen);
+	return sf::String(wstr);
+}
 
 // [Inventory UI System]
 // 인벤토리 화면 그리기, 마우스 입력 처리, 서버 동기화(Lazy Sync)를 담당
@@ -80,3 +95,6 @@ public:
 };
 
 extern InventoryUI g_inventoryUI; // 전역 인스턴스 선언
+
+// 한글 인코딩 위해 sf::String으로 변경
+extern void push_status_message(const sf::String& msg);

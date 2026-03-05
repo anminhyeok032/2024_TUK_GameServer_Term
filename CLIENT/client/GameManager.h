@@ -19,10 +19,9 @@ struct ClientRankInfo {
 class GameManager
 {
 public:
-	static const int BUF_SIZE = 8192;
-
 	sf::RenderWindow* window_;
-	sf::Font font_;
+	sf::Font font_;      // 영문 전용
+	sf::Font fontKo_;    // 한글 지원 폰트 (채팅 히스토리용)
 	sf::TcpSocket socket_;
 
 	int myId_;
@@ -63,7 +62,7 @@ public:
 	sf::RectangleShape chatBox_;
 	sf::Text chatText_;
 	std::string chatInput_;
-	std::vector<std::string> chatHistory_;
+	std::vector<sf::String> chatHistory_;
 	bool isChatActive_;
 
 	// 랭킹

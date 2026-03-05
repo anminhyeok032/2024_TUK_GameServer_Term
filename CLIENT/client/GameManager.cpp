@@ -6,6 +6,7 @@
 #include <iostream>
 #include <cmath>
 #include <algorithm>
+#include <windows.h>
 
 using namespace std;
 
@@ -14,6 +15,13 @@ GameManager g_gameManager;
 // 전역 함수 래퍼 (InventoryUI 등에서 사용)
 void send_packet(void* packet) {
 	g_gameManager.SendPacket(packet);
+}
+
+// InventoryUI에서 채팅 히스토리에 상태 메시지를 추가하는 콜백
+void push_status_message(const sf::String& msg) {
+	g_gameManager.chatHistory_.push_back(msg);
+	if (g_gameManager.chatHistory_.size() > 5)
+		g_gameManager.chatHistory_.erase(g_gameManager.chatHistory_.begin());
 }
 
 GameManager::GameManager() : window_(nullptr), myId_(-1), leftX_(0), topY_(0),
@@ -33,6 +41,15 @@ bool GameManager::Initialize()
 		cout << "Font Loading Error!\n";
 		return false;
 	}
+
+	// 한글 지원 폰트 로드 (맑은 고딕 - Windows 기본 내장)
+	// 로드 실패 시 영문 폰트로 fallback (한글은 깨지지만 크래시 없음)
+	if (!fontKo_.loadFromFile("C:/Windows/Fonts/malgun.ttf")) {
+		if (!fontKo_.loadFromFile("C:/Windows/Fonts/gulim.ttc")) {
+			fontKo_ = font_; // 최종 fallback
+		}
+	}
+
 	return true;
 }
 
@@ -240,7 +257,7 @@ void GameManager::HandleInput()
 					avatar_.set_chat(p.mess, font_);
 
 					// 내 채팅도 히스토리에 추가
-					string msg = "[" + string(avatar_.name) + "] : " + p.mess;
+					sf::String msg = sf::String("[") + avatar_.name + "] : " + chatInput_;
 					chatHistory_.push_back(msg);
 					if (chatHistory_.size() > 5) chatHistory_.erase(chatHistory_.begin());
 
@@ -327,8 +344,8 @@ void GameManager::ProcessPacket(char* ptr)
 		if (p->id == myId_) avatar_.set_chat(p->mess, font_);
 		else players_[p->id].set_chat(p->mess, font_);
 
-		string msg = "[" + string(players_[p->id].name) + "] : " + p->mess;
-		// 내 채팅은 Enter 키 입력 시 이미 추가했으므로 중복 추가 방지
+		// 영문만 사용되므로 sf::String 직접 생성 가능
+		sf::String msg = sf::String("[") + players_[p->id].name + "] : " + p->mess;
 		if (p->id != myId_) {
 			chatHistory_.push_back(msg);
 			if (chatHistory_.size() > 5) chatHistory_.erase(chatHistory_.begin());
@@ -347,7 +364,7 @@ void GameManager::ProcessPacket(char* ptr)
 					   // 공격 처리 및 시각화
 	case SC_ATTACK: {
 		SC_ATTACK_PACKET* p = reinterpret_cast<SC_ATTACK_PACKET*>(ptr);
-		string msg;
+		sf::String msg;
 		int damage = 0;
 		if (players_.count(p->damaged_id)) damage = players_[p->damaged_id].hp - p->hp;
 
@@ -375,13 +392,13 @@ void GameManager::ProcessPacket(char* ptr)
 
 		if (p->exp == 0) { // 공격
 			if (p->attacker_id == myId_) {
-				msg = "You attack " + string(players_[p->damaged_id].name) + " to give " + to_string(damage) + " damage.";
+				msg = sf::String("You attack ") + players_[p->damaged_id].name + " to give " + to_string(damage) + " damage.";
 			}
 			else if (p->damaged_id == myId_) {
-				msg = string(players_[p->attacker_id].name) + " attack you to give " + to_string(damage) + " damage.";
+				msg = sf::String(players_[p->attacker_id].name) + " attack you to give " + to_string(damage) + " damage.";
 			}
 			else {
-				msg = string(players_[p->attacker_id].name) + " attack " + string(players_[p->damaged_id].name) + " to give " + to_string(damage) + " damage.";
+				msg = sf::String(players_[p->attacker_id].name) + " attack " + players_[p->damaged_id].name + " to give " + to_string(damage) + " damage.";
 			}
 
 			if (players_.count(p->damaged_id)) {
@@ -392,14 +409,14 @@ void GameManager::ProcessPacket(char* ptr)
 		else { // 사망/킬
 			if (p->attacker_id == myId_) {
 				avatar_.exp += p->exp;
-				msg = "You killed " + string(players_[p->damaged_id].name) + " and get EXP : " + to_string(p->exp);
+				msg = sf::String("You killed ") + players_[p->damaged_id].name + " and get EXP : " + to_string(p->exp);
 			}
 			else if (p->damaged_id == myId_) {
 				avatar_.exp -= avatar_.exp / 2;
-				msg = string(players_[p->attacker_id].name) + " killed you and lose EXP - " + to_string(avatar_.exp);
+				msg = sf::String(players_[p->attacker_id].name) + " killed you and lose EXP - " + to_string(avatar_.exp);
 			}
 			else {
-				msg = string(players_[p->attacker_id].name) + " killed " + string(players_[p->damaged_id].name) + " and get EXP - " + to_string(p->exp);
+				msg = sf::String(players_[p->attacker_id].name) + " killed " + players_[p->damaged_id].name + " and get EXP - " + to_string(p->exp);
 			}
 		}
 		chatHistory_.push_back(msg);
@@ -414,7 +431,7 @@ void GameManager::ProcessPacket(char* ptr)
 		}
 		break;
 	}
-				   // 필드 아이템 생성 알림
+	// 필드 아이템 생성 알림
 	case SC_ADD_MAP_ITEM: {
 		SC_ADD_MAP_ITEM_PACKET* p = reinterpret_cast<SC_ADD_MAP_ITEM_PACKET*>(ptr);
 		MapItemInfo info;
@@ -459,6 +476,13 @@ void GameManager::ProcessPacket(char* ptr)
 			p->y,
 			p->is_rotated
 		);
+
+		// 획득 상태 메시지
+		const ItemInfo* itemInfo = ItemDatabase::GetInstance().Get(p->template_id);
+		sf::String itemName = itemInfo ? ToSfString(itemInfo->name) : sf::String("Unknown Item");
+		sf::String msg = sf::String("[Item Get] ") + itemName + " x" + to_string(p->count);
+		chatHistory_.push_back(msg);
+		if (chatHistory_.size() > 5) chatHistory_.erase(chatHistory_.begin());
 		break;
 	}
 	// 로그인 시 인벤토리 전체 동기화 (패킷 1개로 모든 아이템 수신)
@@ -615,8 +639,8 @@ void GameManager::Draw()
 	}
 	float yOffset = 530;
 	for (auto it = chatHistory_.rbegin(); it != chatHistory_.rend() && yOffset > 0; ++it) {
-		sf::Text t(*it, font_, 20);
-		t.setFillColor(sf::Color::White); // 채팅 색상 흰색
+		sf::Text t(*it, fontKo_, 20);
+		t.setFillColor(sf::Color::White);
 		t.setPosition(5, yOffset);
 		window_->draw(t);
 		yOffset -= 25;
