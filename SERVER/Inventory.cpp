@@ -102,19 +102,23 @@ bool Inventory::PlaceItem(Item* item, int x, int y, bool rotated)
 	int h = rotated ? info.width : info.height;
 
 	// 놓을 수 있는지 검사
-	if (!CanPlace(x, y, w, h, item->item_uid)) {
+	if (!CanPlace(x, y, w, h, item->item_uid))
+	{
 		return false;
 	}
 
 	// 기존 위치 지우기 (만약 이미 인벤토리에 있던 아이템이라면)
-	if (items_.find(item->item_uid) != items_.end()) {
+	if (items_.find(item->item_uid) != items_.end())
+	{
 		Item* old_item = items_[item->item_uid];
 		ItemTemplate old_info = GetItemTemplate(old_item->template_id);
 		int old_w = old_item->is_rotated ? old_info.height : old_info.width;
 		int old_h = old_item->is_rotated ? old_info.width : old_info.height;
 
-		for (int r = old_item->y; r < old_item->y + old_h; ++r) {
-			for (int c = old_item->x; c < old_item->x + old_w; ++c) {
+		for (int r = old_item->y; r < old_item->y + old_h; ++r)
+		{
+			for (int c = old_item->x; c < old_item->x + old_w; ++c) 
+			{
 				if (grid_[r][c] == item->item_uid) grid_[r][c] = 0;
 			}
 		}
@@ -125,8 +129,10 @@ bool Inventory::PlaceItem(Item* item, int x, int y, bool rotated)
 	item->y = y;
 	item->is_rotated = rotated;
 
-	for (int r = y; r < y + h; ++r) {
-		for (int c = x; c < x + w; ++c) {
+	for (int r = y; r < y + h; ++r)
+	{
+		for (int c = x; c < x + w; ++c)
+		{
 			grid_[r][c] = item->item_uid;
 		}
 	}
@@ -141,14 +147,15 @@ bool Inventory::AddItem(Item* item)
 	ItemTemplate info = GetItemTemplate(item->template_id);
 	
 	// 빈 공간 완전 탐색 (좌상단부터)
-	for (int y = 0; y < INV_MAX_ROW; ++y) {
-		for (int x = 0; x < INV_MAX_COL; ++x) {
+	for (int y = 0; y < INV_MAX_ROW; ++y) 
+	{
+		for (int x = 0; x < INV_MAX_COL; ++x) 
+		{
 			// 기본 방향으로 시도
 			if (CanPlace(x, y, info.width, info.height)) 
 			{
 				return PlaceItem(item, x, y, false);
 			}
-			// (선택) 회전해서도 시도해볼 수 있음
 		}
 	}
 	return false; // 공간 부족
@@ -175,8 +182,10 @@ Item* Inventory::RemoveItem(long long item_uid)
 	int h = item->is_rotated ? info.width : info.height;
 
 	// 그리드 비우기
-	for (int y = item->y; y < item->y + h; ++y) {
-		for (int x = item->x; x < item->x + w; ++x) {
+	for (int y = item->y; y < item->y + h; ++y) 
+	{
+		for (int x = item->x; x < item->x + w; ++x)
+		{
 			if (grid_[y][x] == item_uid) grid_[y][x] = 0;
 		}
 	}
@@ -190,7 +199,8 @@ std::vector<std::pair<std::string, std::string>> Inventory::GetInventoryDataForR
 	std::vector<std::pair<std::string, std::string>> data;
 	data.reserve(items_.size());
 
-	for (const auto& pair : items_) {
+	for (const auto& pair : items_) 
+	{
 		Item* item = pair.second;
 		// Format: "TemplateID:Count:X:Y:Rotated"
 		std::string val = std::to_string(item->template_id) + ":" +
@@ -207,8 +217,10 @@ std::vector<std::pair<std::string, std::string>> Inventory::GetInventoryDataForR
 void Inventory::PrintGrid()
 {
 	std::cout << "===== Inventory Grid =====" << std::endl;
-	for (int y = 0; y < INV_MAX_ROW; ++y) {
-		for (int x = 0; x < INV_MAX_COL; ++x) {
+	for (int y = 0; y < INV_MAX_ROW; ++y) 
+	{
+		for (int x = 0; x < INV_MAX_COL; ++x) 
+		{
 			if (grid_[y][x] == 0) std::cout << ". ";
 			else std::cout << grid_[y][x] % 10 << " "; // ID 끝자리만 출력
 		}

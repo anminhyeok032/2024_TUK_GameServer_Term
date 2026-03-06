@@ -854,13 +854,21 @@ void Player::ProcessPacket(char* packet)
 
 			delete droppedItem;	// 원본 삭제
 
+			// 주변 플레이어에게 알림 + Player의 view_list_에 MapItem 등록
 			for (auto& sector : mapItem->around_sector_)
 			{
 				std::lock_guard<std::mutex> sec_l(g_ObjectSector[sector].mut_sector_);
 				for (auto& pid : g_ObjectSector[sector].sec_id_)
 				{
 					if (IsPlayer(pid) && CanSee(mapItem->id_, pid))
+					{
+						// Player의 view_list_에 MapItem 추가
+						objects[pid]->mut_view_.lock();
+						objects[pid]->view_list_.insert(map_id);
+						objects[pid]->mut_view_.unlock();
+						// 패킷 전송
 						mapItem->SendAddObjectPacket(pid);
+					}
 				}
 			}
 
@@ -897,6 +905,13 @@ void Player::ProcessPacket(char* packet)
 
 			if (target) 
 			{
+				// 다른 플레이어가 이미 주웠다면 OS_INGAME이 아니므로 실패
+				{
+					std::lock_guard<std::mutex> ll(objects[target->id_]->mut_state_);
+					if (objects[target->id_]->state_ != OS_INGAME) break; // 이미 주워진 아이템
+					objects[target->id_]->state_ = OS_FREE; // 선점
+				}
+
 				// 줍기 성공
 				Item* newItem = new Item();
 				newItem->item_uid = target->item_uid;
@@ -905,13 +920,12 @@ void Player::ProcessPacket(char* packet)
 				// 인벤토리에 추가 (자동 빈칸)
 				if (inventory_->AddItem(newItem)) 
 				{
-					// 맵에서 제거
 					int target_id = target->id_;
 
 					// 인벤토리에 들어간 위치(x,y)가 확정된 직후 바로 전송
 					SendGetItemPacket(newItem);
 					
-					// 주변에 제거 알림
+					// 주변에 제거 알림 (MapItem::SendRemoveObjectPacket이 view_list_도 정리함)
 					for (auto& sector : target->around_sector_) 
 					{
 						std::lock_guard<std::mutex> sec_l(g_ObjectSector[sector].mut_sector_);
@@ -927,11 +941,6 @@ void Player::ProcessPacket(char* packet)
 						}
 					}
 
-					// 객체 해제 (OS_FREE)
-					{
-						std::lock_guard<std::mutex> ll(objects[target_id]->mut_state_);
-						objects[target_id]->state_ = OS_FREE;
-					}
 					// 섹터에서 제거
 					std::pair<int, int> sec = target->current_sector_;
 					g_ObjectSector[sec].mut_sector_.lock();
@@ -942,7 +951,12 @@ void Player::ProcessPacket(char* packet)
 				} 
 				else 
 				{
-					delete newItem; // 인벤 꽉 참
+					// 인벤 꽉 참 - 선점한 state_를 OS_INGAME으로 복구
+					{
+						std::lock_guard<std::mutex> ll(objects[target->id_]->mut_state_);
+						objects[target->id_]->state_ = OS_INGAME;
+					}
+					delete newItem;
 				}
 			}
 			break;

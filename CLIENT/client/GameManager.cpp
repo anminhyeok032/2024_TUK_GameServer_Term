@@ -610,6 +610,29 @@ void GameManager::Draw()
 				item.sprite.setScale(scale, scale);
 				item.sprite.setPosition(tileX + offsetX, tileY + offsetY);
 				window_->draw(item.sprite);
+
+				// 아이템 이름 라벨 UI (아이템 아래에 반투명 검정 배경 + 이름)
+				sf::String labelStr = ToSfString(itemInfo->name);
+				sf::Text labelText(labelStr, fontKo_, 11);
+				labelText.setFillColor(sf::Color::White);
+
+				// 텍스트 크기 계산 후 중앙 정렬
+				sf::FloatRect textBounds = labelText.getLocalBounds();
+				float labelW = textBounds.width + 6.f;
+				float labelH = textBounds.height + 4.f;
+				float labelX = tileX + ((float)TILE_WIDTH - labelW) / 2.f;
+				float labelY = tileY + (float)TILE_WIDTH + 2.f; // 아이템 아래
+
+				// 반투명 검정 배경
+				sf::RectangleShape labelBg(sf::Vector2f(labelW, labelH));
+				labelBg.setFillColor(sf::Color(0, 0, 0, 180));
+				labelBg.setPosition(labelX, labelY);
+				window_->draw(labelBg);
+
+				// 텍스트 (배경 위 중앙)
+				labelText.setPosition(labelX + 3.f, labelY + 1.f);
+				window_->draw(labelText);
+
 				continue;
 			}
 		}
@@ -625,7 +648,7 @@ void GameManager::Draw()
 
 	// UI
 	window_->draw(mapRect_);
-	playerDot_.setPosition((float)(MAP_WIDTH + (avatar_.m_x / (2.1 * (W_WIDTH / 400)))), (float)(MAP_HEIGHT + (avatar_.m_y / (2.1 * (W_HEIGHT / 400))))); // [Mod] double->float 형변환 경고 해결
+	playerDot_.setPosition((float)(MAP_WIDTH + (avatar_.m_x / (2.1 * (W_WIDTH / 400)))), (float)(MAP_HEIGHT + (avatar_.m_y / (2.1 * (W_HEIGHT / 400)))));
 	window_->draw(playerDot_);
 	window_->draw(hpBar_);
 	window_->draw(expBar_);

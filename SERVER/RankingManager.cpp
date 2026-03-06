@@ -20,9 +20,11 @@ bool IsValidName(const std::string& name)
 }
 
 // 오른쪽 공백 제거
-inline std::string RTrim(std::string s) {
-    s.erase(std::find_if(s.rbegin(), s.rend(), [](unsigned char ch) {
-        return !std::isspace(ch);
+inline std::string RTrim(std::string s) 
+{
+    s.erase(std::find_if(s.rbegin(), s.rend(), [](unsigned char ch)
+        {
+            return !std::isspace(ch);
         }).base(), s.end());
     return s;
 }

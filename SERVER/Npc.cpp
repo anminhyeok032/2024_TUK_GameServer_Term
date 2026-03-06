@@ -313,6 +313,11 @@ void Npc::DropItem()
 					{
 						if (true == CanSee(mapItem->id_, pid)) 
 						{
+							// Player의 view_list_에 MapItem 추가
+							objects[pid]->mut_view_.lock();
+							objects[pid]->view_list_.insert(map_id);
+							objects[pid]->mut_view_.unlock();
+							// 패킷 전송
 							mapItem->SendAddObjectPacket(pid);
 						}
 					}

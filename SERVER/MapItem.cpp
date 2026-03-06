@@ -28,6 +28,11 @@ void MapItem::SendRemoveObjectPacket(int c_id)
 	Player* p = dynamic_cast<Player*>(objects[c_id].get());
 	if (!p) return;
 
+	// Player의 view_list_에서 이 MapItem 제거
+	p->mut_view_.lock();
+	p->view_list_.erase(id_);
+	p->mut_view_.unlock();
+
 	SC_REMOVE_MAP_ITEM_PACKET packet;
 	packet.size = sizeof(SC_REMOVE_MAP_ITEM_PACKET);
 	packet.type = SC_REMOVE_MAP_ITEM;

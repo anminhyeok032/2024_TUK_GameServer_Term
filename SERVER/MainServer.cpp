@@ -245,8 +245,10 @@ void disconnect(int c_id)
 // 맵 초기화 시 반드시 호출
 void InitializeSectors() 
 {
-	for (int y = 0; y <= W_HEIGHT / SEC_COL; ++y) {
-		for (int x = 0; x <= W_WIDTH / SEC_ROW; ++x) {
+	for (int y = 0; y <= W_HEIGHT / SEC_COL; ++y) 
+	{
+		for (int x = 0; x <= W_WIDTH / SEC_ROW; ++x)
+		{
 			// 미리 생성하여 맵 생성 시 락 문제 방지
 			g_ObjectSector[{x, y}];
 		}
