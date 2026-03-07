@@ -202,12 +202,24 @@ void GameManager::HandleInput()
 				if (event.key.code == sf::Keyboard::I) {
 					g_inventoryUI.Toggle();
 				}
-				// G키로 아이템 줍기
+				// G키로 아이템 줍기 (클라이언트 자체 인벤토리 공간 판단)
 				if (event.key.code == sf::Keyboard::G) {
-					CS_ITEM_PICKUP_PACKET p;
-					p.size = sizeof(p);
-					p.type = CS_ITEM_PICKUP;
-					SendPacket(&p);
+					int pickupTemplateId = -1;
+					for (auto& kv : mapItems_) {
+						if (kv.second.x == avatar_.m_x && kv.second.y == avatar_.m_y) {
+							pickupTemplateId = kv.second.template_id;
+							break;
+						}
+					}
+					if (pickupTemplateId != -1 && !g_inventoryUI.HasSpaceFor(pickupTemplateId)) {
+						push_status_message(sf::String(L"[인벤토리] 아이템을 넣을 공간이 부족합니다."));
+					}
+					else {
+						CS_ITEM_PICKUP_PACKET p;
+						p.size = sizeof(p);
+						p.type = CS_ITEM_PICKUP;
+						SendPacket(&p);
+					}
 				}
 				if (event.key.code == sf::Keyboard::P) {
 					isRankingActive_ = !isRankingActive_;
@@ -648,7 +660,7 @@ void GameManager::Draw()
 
 	// UI
 	window_->draw(mapRect_);
-	playerDot_.setPosition((float)(MAP_WIDTH + (avatar_.m_x / (2.1 * (W_WIDTH / 400)))), (float)(MAP_HEIGHT + (avatar_.m_y / (2.1 * (W_HEIGHT / 400)))));
+	playerDot_.setPosition((float)(MAP_WIDTH + (avatar_.m_x / (2.1 * (W_WIDTH / 400)))), (float)(MAP_HEIGHT + (avatar_.m_y / (2.1 * (W_HEIGHT / 400))))); 
 	window_->draw(playerDot_);
 	window_->draw(hpBar_);
 	window_->draw(expBar_);

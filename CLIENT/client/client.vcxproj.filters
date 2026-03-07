@@ -22,9 +22,6 @@
     <ClCompile Include="client.cpp">
       <Filter>Main</Filter>
     </ClCompile>
-    <ClCompile Include="GameManager.cpp">
-      <Filter>Game\System</Filter>
-    </ClCompile>
     <ClCompile Include="InventoryUI.cpp">
       <Filter>Game\System</Filter>
     </ClCompile>
@@ -36,6 +33,9 @@
     </ClCompile>
     <ClCompile Include="ItemSpriteSheet.cpp">
       <Filter>Game\Item</Filter>
+    </ClCompile>
+    <ClCompile Include="GameManager.cpp">
+      <Filter>Game\System</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

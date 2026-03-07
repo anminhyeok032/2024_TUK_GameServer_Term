@@ -105,6 +105,21 @@ bool InventoryUI::CanPlace(int startX, int startY, int w, int h, long long exclu
 	return true;
 }
 
+bool InventoryUI::HasSpaceFor(int template_id)
+{
+	ClientItemTemplate info = GetItemTemplate(template_id);
+	// 서버 Inventory::AddItem과 동일한 탐색 순서 (좌상단부터)
+	for (int y = 0; y < INV_MAX_ROW; ++y)
+	{
+		for (int x = 0; x < INV_MAX_COL; ++x)
+		{
+			if (CanPlace(x, y, info.w, info.h, -1))
+				return true;
+		}
+	}
+	return false;
+}
+
 void InventoryUI::AddItem(long long uid, int tid, int cnt, int x, int y, bool rot)
 {
 	// 중복 UID 방지 - 이미 있으면 무시

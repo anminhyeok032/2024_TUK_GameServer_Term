@@ -89,6 +89,8 @@ public:
 	ClientItem* FindItem(long long uid);
 	ClientItemTemplate GetItemTemplate(int tid);
 	bool CanPlace(int startX, int startY, int w, int h, long long excludeUID);
+	bool HasSpaceFor(int template_id);
+	
 	
 	// 서버로 변경사항 전송
 	void SyncToServer();

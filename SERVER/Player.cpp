@@ -726,11 +726,11 @@ void Player::ProcessPacket(char* packet)
 			}
 			}
 			
-			std::vector<int> dead_npc_ids; // 사망한 NPC ID 수집용
-
 			// 공격 적용
 			for(const auto& coord : attack_coord)
 			{
+				std::vector<int> dead_npc_ids; // 사망한 NPC ID 수집용 (좌표마다 초기화)
+
 				// 공격 위치에 맞는 섹터를 얻어서 검사함
 				std::pair<int, int> sector_key = { coord.first / SEC_ROW, coord.second / SEC_COL };
 				auto& sector = g_ObjectSector[sector_key];
