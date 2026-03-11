@@ -12,6 +12,7 @@ constexpr char CS_RANKING_REQ = 6;
 constexpr char CS_ITEM_MOVE = 7;		// 아이템 이동 요청
 constexpr char CS_ITEM_DROP = 8;        // 아이템 버리기 요청
 constexpr char CS_ITEM_PICKUP = 9;      // 아이템 줍기 요청
+constexpr char CS_ITEM_SORT = 10;       // 인벤토리 자동 정렬 요청
 
 constexpr char SC_LOGIN_INFO = 2;
 constexpr char SC_LOGIN_FAIL = 3;
@@ -101,6 +102,21 @@ struct CS_ITEM_DROP_PACKET {
 struct CS_ITEM_PICKUP_PACKET {
 	unsigned short size;
 	char type;
+};
+
+// 자동 정렬 슬롯 (CS_ITEM_SORT 내부 배열용)
+struct SortSlot {
+	long long item_uid;
+	short x, y;
+	bool is_rotated;
+};
+
+// 인벤토리 자동 정렬 요청 패킷 (가변 크기)
+struct CS_ITEM_SORT_PACKET {
+	unsigned short size;
+	char type;        // CS_ITEM_SORT
+	int item_count;
+	SortSlot slots[1]; // 가변 배열
 };
 
 struct SC_LOGIN_INFO_PACKET {
@@ -200,12 +216,14 @@ struct SC_ITEM_MOVE_RESULT_PACKET {
 struct SC_ADD_MAP_ITEM_PACKET {
 	unsigned short size;
 	char type;
-	int object_id;    // 맵상의 오브젝트 ID
-	long long item_uid; // 실제 아이템 데이터 ID
+	int object_id;	// 맵상의 오브젝트 ID (Player/NPC ID와 겹치지 않게 관리 필요)
+	int drop_time_ms; // 같은 타일 우선순위 판별위한
+	long long item_uid;
 	int template_id;
 	int count;
 	short x, y;
-};
+};	
+
 
 // 필드 아이템 삭제 알림
 struct SC_REMOVE_MAP_ITEM_PACKET {

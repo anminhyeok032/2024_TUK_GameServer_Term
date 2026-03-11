@@ -36,6 +36,10 @@ public:
 	// 템플릿 정보 가져오기
 	ItemTemplate GetItemTemplate(int template_id); 
 
+	// 정렬 결과 일괄 적용 (그리드 전체 초기화 후 재배치)
+	// slots: {item_uid, x, y, is_rotated} 리스트
+	void ApplySortResult(const std::vector<std::tuple<long long, short, short, bool>>& slots);
+
 	// Redis 저장을 위한 데이터 반환 (items_ 캡슐화 유지)
 	// 반환값: vector of {ItemUID, ValueString}
 	std::vector<std::pair<std::string, std::string>> GetInventoryDataForRedis();

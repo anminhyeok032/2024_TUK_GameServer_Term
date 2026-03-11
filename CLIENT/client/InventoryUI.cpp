@@ -120,6 +120,102 @@ bool InventoryUI::HasSpaceFor(int template_id)
 	return false;
 }
 
+void InventoryUI::SortItems()
+{
+	if (myItems_.empty()) return;
+
+	// 1. 면적 내림차순 정렬 (크기 같으면 w 내림차순)
+	std::vector<ClientItem*> sorted;
+	for (auto& item : myItems_)
+	{
+		sorted.push_back(&item);
+	}
+
+	std::sort(sorted.begin(), sorted.end(), [&](const ClientItem* a, const ClientItem* b) {
+		ClientItemTemplate ia = GetItemTemplate(a->template_id);
+		ClientItemTemplate ib = GetItemTemplate(b->template_id);
+		int areaA = ia.w * ia.h;
+		int areaB = ib.w * ib.h;
+		if (areaA != areaB) return areaA > areaB;
+		return ia.w > ib.w;
+	});
+
+	// 2. 모든 아이템 rotated = false 초기화 (정렬 기준은 회전 없이 계산)
+	for (auto& item : myItems_)
+	{
+		item.is_rotated = false;
+	}
+
+	int grid[INV_MAX_ROW][INV_MAX_COL] = {};
+
+	auto canPlaceOnGrid = [&](int sx, int sy, int w, int h) {
+		if (sx < 0 || sy < 0 || sx + w > INV_MAX_COL || sy + h > INV_MAX_ROW)	return false;
+		for (int gy = sy; gy < sy + h; ++gy)
+		{
+			for (int gx = sx; gx < sx + w; ++gx)
+			{
+				if (grid[gy][gx] != 0) return false;
+			}
+		}
+		return true;
+	};
+
+	auto placeOnGrid = [&](int sx, int sy, int w, int h) {
+		for (int gy = sy; gy < sy + h; ++gy)
+		{
+			for (int gx = sx; gx < sx + w; ++gx)
+			{
+				grid[gy][gx] = 1;
+			}
+		}
+	};
+
+	for (ClientItem* item : sorted)
+	{
+		ClientItemTemplate info = GetItemTemplate(item->template_id);
+		int w = info.w;
+		int h = info.h;
+		bool placed = false;
+		for (int y = 0; y < INV_MAX_ROW && !placed; ++y) 
+		{
+			for (int x = 0; x < INV_MAX_COL && !placed; ++x) 
+			{
+				if (canPlaceOnGrid(x, y, w, h)) 
+				{
+					placeOnGrid(x, y, w, h);
+					item->x = x;
+					item->y = y;
+					placed = true;
+				}
+			}
+		}
+	}
+
+	// 4. 정렬된 전체 아이템 위치를 CS_ITEM_SORT_PACKET 1개로 서버에 전송
+	int count = (int)myItems_.size();
+	int packetSize = (int)(sizeof(CS_ITEM_SORT_PACKET) + sizeof(SortSlot) * (count - 1));
+	std::vector<char> buf(packetSize, 0);
+	CS_ITEM_SORT_PACKET* pkt = reinterpret_cast<CS_ITEM_SORT_PACKET*>(buf.data());
+	pkt->size = (unsigned short)packetSize;
+	pkt->type = CS_ITEM_SORT;
+	pkt->item_count = count;
+	for (int i = 0; i < count; ++i)
+	{
+		pkt->slots[i].item_uid   = myItems_[i].item_uid;
+		pkt->slots[i].x          = (short)myItems_[i].x;
+		pkt->slots[i].y          = (short)myItems_[i].y;
+		pkt->slots[i].is_rotated = myItems_[i].is_rotated;
+	}
+	send_packet(pkt);
+
+	// 5. Dirty Sync 초기화 (정렬로 이미 서버에 전송 완료)
+	isDirty_ = false;
+	dirtyItemUIDs_.clear();
+	lastSyncTime_ = std::chrono::system_clock::now();
+
+	push_status_message(sf::String(ToSfString("[Inventory] 정렬 성공.")));
+}
+
 void InventoryUI::AddItem(long long uid, int tid, int cnt, int x, int y, bool rot)
 {
 	// 중복 UID 방지 - 이미 있으면 무시
@@ -196,7 +292,7 @@ void InventoryUI::HandleInput(sf::Event& event)
 	if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
 		for (auto& item : myItems_) {
 			float itemX = (float)(UI_X + 10 + item.x * SLOT_SIZE);
-			float itemY = (float)(UI_Y + 35 + item.y * SLOT_SIZE);
+			float itemY = (float)(UI_Y + HEADER_H + item.y * SLOT_SIZE);
 
 			ClientItemTemplate info = GetItemTemplate(item.template_id);
 			int w = item.is_rotated ? info.h : info.w;
@@ -222,7 +318,7 @@ void InventoryUI::HandleInput(sf::Event& event)
 
 				// 그리드 좌표 변환 (+ 반올림 보정)
 				int gridX = (int)((dropX - UI_X - 10 + (SLOT_SIZE / 2)) / SLOT_SIZE);
-				int gridY = (int)((dropY - UI_Y - 35 + (SLOT_SIZE / 2)) / SLOT_SIZE);
+				int gridY = (int)((dropY - UI_Y - HEADER_H + (SLOT_SIZE / 2)) / SLOT_SIZE);
 
 				ClientItemTemplate info = GetItemTemplate(item->template_id);
 				int w = item->is_rotated ? info.h : info.w;
@@ -237,8 +333,8 @@ void InventoryUI::HandleInput(sf::Event& event)
 				}
 				else {
 					// 인벤토리 영역 밖으로 드롭 -> 아이템 버리기
-					sf::FloatRect invRect((float)UI_X, (float)UI_Y,
-						(float)(INV_MAX_COL * SLOT_SIZE + 20), (float)(INV_MAX_ROW * SLOT_SIZE + 40));
+				sf::FloatRect invRect((float)UI_X, (float)UI_Y,
+					(float)(INV_MAX_COL * SLOT_SIZE + 20), (float)(INV_MAX_ROW * SLOT_SIZE + HEADER_H));
 
 					if (!invRect.contains((float)mousePos.x, (float)mousePos.y)) {
 						// 버리기 패킷 전송
@@ -279,7 +375,7 @@ void InventoryUI::HandleInput(sf::Event& event)
 		if (!isDragging_) {
 			for (auto& item : myItems_) {
 				float itemX = (float)(UI_X + 10 + item.x * SLOT_SIZE);
-				float itemY = (float)(UI_Y + 35 + item.y * SLOT_SIZE);
+				float itemY = (float)(UI_Y + HEADER_H + item.y * SLOT_SIZE);
 				ClientItemTemplate info = GetItemTemplate(item.template_id);
 				int w = item.is_rotated ? info.h : info.w;
 				int h = item.is_rotated ? info.w : info.h;
@@ -293,7 +389,7 @@ void InventoryUI::HandleInput(sf::Event& event)
 					if (CanPlace(item.x, item.y, nextW, nextH, item.item_uid)) {
 						item.is_rotated = nextRotated;
 						isDirty_ = true;
-						dirtyItemUIDs_.insert(item.item_uid); // [Add] 변경된 아이템 UID 등록
+						dirtyItemUIDs_.insert(item.item_uid); // 변경된 아이템 UID 등록
 					}
 					break;
 				}
@@ -308,7 +404,7 @@ void InventoryUI::Draw()
 
 	// 배경
 	float bgWidth = INV_MAX_COL * SLOT_SIZE + 20.f;
-	float bgHeight = INV_MAX_ROW * SLOT_SIZE + 40.f;
+	float bgHeight = INV_MAX_ROW * SLOT_SIZE + (float)HEADER_H;
 
 	sf::RectangleShape bg(sf::Vector2f(bgWidth, bgHeight));
 	bg.setFillColor(sf::Color(50, 50, 50, 230));
@@ -318,10 +414,15 @@ void InventoryUI::Draw()
 	window_->draw(bg);
 
 	// 제목
-	sf::Text title("INVENTORY (I:Close, Drag:Move, R-Click:Rotate)", *font_, 15);
+	sf::Text title("INVENTORY  I:Close  Drag:Move", *font_, 13);
 	title.setFillColor(sf::Color::White);
-	title.setPosition((float)UI_X + 10.f, (float)UI_Y + 5.f);
+	title.setPosition((float)UI_X + 10.f, (float)UI_Y + 3.f);
 	window_->draw(title);
+
+	sf::Text title2("R-Click:Rotate  O:Sort", *font_, 13);
+	title2.setFillColor(sf::Color::White);
+	title2.setPosition((float)UI_X + 10.f, (float)UI_Y + 18.f);
+	window_->draw(title2);
 
 	// 그리드
 	sf::RectangleShape slot(sf::Vector2f(SLOT_SIZE - MARGIN * 2.f, SLOT_SIZE - MARGIN * 2.f));
@@ -332,7 +433,7 @@ void InventoryUI::Draw()
 	for (int y = 0; y < INV_MAX_ROW; ++y) {
 		for (int x = 0; x < INV_MAX_COL; ++x) {
 			float slotX = (float)(UI_X + 10 + x * SLOT_SIZE);
-			float slotY = (float)(UI_Y + 35 + y * SLOT_SIZE);
+			float slotY = (float)(UI_Y + HEADER_H + y * SLOT_SIZE);
 			slot.setPosition(slotX + MARGIN, slotY + MARGIN);
 			window_->draw(slot);
 		}
@@ -347,7 +448,7 @@ void InventoryUI::Draw()
 		if (isDragging_ && item.item_uid == draggingItemUID_) continue;
 
 		float itemX = (float)(UI_X + 10 + item.x * SLOT_SIZE);
-		float itemY = (float)(UI_Y + 35 + item.y * SLOT_SIZE);
+		float itemY = (float)(UI_Y + HEADER_H + item.y * SLOT_SIZE);
 
 		ClientItemTemplate info = GetItemTemplate(item.template_id);
 		int w = item.is_rotated ? info.h : info.w;

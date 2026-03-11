@@ -48,9 +48,6 @@
     <ClInclude Include="GameManager.h">
       <Filter>Game\System</Filter>
     </ClInclude>
-    <ClInclude Include="InventoryUI.h">
-      <Filter>Game\System</Filter>
-    </ClInclude>
     <ClInclude Include="Object.h">
       <Filter>Game\Object</Filter>
     </ClInclude>
@@ -60,6 +57,9 @@
     </ClInclude>
     <ClInclude Include="ItemSpriteSheet.h">
       <Filter>Game\Item</Filter>
+    </ClInclude>
+    <ClInclude Include="InventoryUI.h">
+      <Filter>Game\System</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

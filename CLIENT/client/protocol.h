@@ -9,9 +9,10 @@ constexpr char CS_ATTACK = 3;			// 4 방향 공격
 constexpr char CS_TELEPORT = 4;			// RANDOM한 위치로 Teleport, Stress Test때 핫스팟으로 이동하기 위해 사용
 constexpr char CS_LOGOUT = 5;			// 클라이언트에서 정상적으로 종료를 알리는 패킷
 constexpr char CS_RANKING_REQ = 6;
-constexpr char CS_ITEM_MOVE = 7;
+constexpr char CS_ITEM_MOVE = 7;		// 아이템 이동 요청
 constexpr char CS_ITEM_DROP = 8;        // 아이템 버리기 요청
 constexpr char CS_ITEM_PICKUP = 9;      // 아이템 줍기 요청
+constexpr char CS_ITEM_SORT = 10;       // 인벤토리 자동 정렬 요청
 
 constexpr char SC_LOGIN_INFO = 2;
 constexpr char SC_LOGIN_FAIL = 3;
@@ -70,11 +71,11 @@ struct CS_LOGOUT_PACKET {
 struct CS_ATTACK_PACKET {
 	unsigned short size;
 	char	type;
-	char	attack_type;	// 0: 평타, 1: 범위공격
+	char	attack_type;	// 0: 평타, 1: 범위
 	char	attack_direction;  // 0 : UP, 1 : DOWN, 2 : LEFT, 3 : RIGHT, 4 : 4방향
 };
 
-// 랭킹 요청 패킷
+// [Client -> Server] 랭킹 요청 패킷
 struct CS_RANKING_REQ_PACKET {
 	unsigned short size;
 	char type;
@@ -101,6 +102,21 @@ struct CS_ITEM_DROP_PACKET {
 struct CS_ITEM_PICKUP_PACKET {
 	unsigned short size;
 	char type;
+};
+
+// 자동 정렬 슬롯 (CS_ITEM_SORT 내부 배열용)
+struct SortSlot {
+	long long item_uid;
+	short x, y;
+	bool is_rotated;
+};
+
+// 인벤토리 자동 정렬 요청 패킷 (가변 크기)
+struct CS_ITEM_SORT_PACKET {
+	unsigned short size;
+	char type;        // CS_ITEM_SORT
+	int item_count;
+	SortSlot slots[1]; // 가변 배열
 };
 
 struct SC_LOGIN_INFO_PACKET {
@@ -168,7 +184,7 @@ struct SC_ATTACK_PACKET {
 	int		max_hp;
 	int		hp;
 	int     exp;
-	int		damage;	
+	int		damage;
 
 	// 공격 시각화를 위한 정보
 	char	attack_type;	// 0: 평타, 1: 범위공격
@@ -200,12 +216,14 @@ struct SC_ITEM_MOVE_RESULT_PACKET {
 struct SC_ADD_MAP_ITEM_PACKET {
 	unsigned short size;
 	char type;
-	int object_id;    // 맵상의 오브젝트 ID (Player/NPC ID와 겹치지 않게 관리 필요)
-	long long item_uid; // 실제 아이템 데이터 ID
+	int object_id;	// 맵상의 오브젝트 ID (Player/NPC ID와 겹치지 않게 관리 필요)
+	int drop_time_ms; // 같은 타일 우선순위 판별위한
+	long long item_uid;
 	int template_id;
 	int count;
 	short x, y;
 };
+
 
 // 필드 아이템 삭제 알림
 struct SC_REMOVE_MAP_ITEM_PACKET {
@@ -221,7 +239,7 @@ struct SC_GET_ITEM_PACKET {
 	long long item_uid;
 	int template_id;
 	int count;
-	short x, y;
+	short x, y; // 인벤토리 어느 칸에 들어왔는지
 	bool is_rotated;
 };
 
@@ -235,11 +253,13 @@ struct InventorySlot {
 };
 
 // 로그인 시 인벤토리 전체 동기화 패킷 (가변 크기)
+// 실제 size = sizeof(SC_INVENTORY_SYNC_PACKET) + (item_count - 1) * sizeof(InventorySlot)
 struct SC_INVENTORY_SYNC_PACKET {
 	unsigned short size;
 	char type;
-	int item_count;
-	InventorySlot items[1]; // 가변 배열
+	int item_count;                    // 실제 아이템 개수
+	InventorySlot items[1];            // 가변 배열 (item_count개 실제 전송)
 };
+
 
 #pragma pack (pop)

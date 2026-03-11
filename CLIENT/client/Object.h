@@ -42,6 +42,7 @@ public:
 // 필드 아이템 구조체
 struct MapItemInfo {
 	int object_id;
+	int drop_time_ms; // encoded drop time (ms since epoch mod INT_MAX); higher = more recent
 	int template_id;
 	int count;
 	int x, y;

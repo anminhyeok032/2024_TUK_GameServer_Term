@@ -139,18 +139,18 @@ void Worker()
 		}
 		case KEY_RECV:
 		{
-			char* p = ex_over->send_buf_;
-
-			int total_data = bytes + static_cast<int>(objects[key]->prev_packet_.size());
-
 			auto& buffer = objects[key]->prev_packet_;
-			buffer.insert(buffer.end(), ex_over->send_buf_, ex_over->send_buf_ + bytes);
+			int prev_size = static_cast<int>(buffer.size());
+			buffer.insert(buffer.end(),
+				ex_over->send_buf_ + prev_size,
+				ex_over->send_buf_ + prev_size + bytes);
 
-			while (buffer.size() > 0)
+			while (buffer.size() >= 2)
 			{
-				// 첫 2바이트를 읽어 패킷 크기 계산
-				uint16_t packet_size = static_cast<uint16_t>(buffer[0]) |
-					(static_cast<uint16_t>(buffer[1]) << 8);
+				uint16_t packet_size = static_cast<uint16_t>(
+					static_cast<unsigned char>(buffer[0])) |
+					(static_cast<uint16_t>(
+						static_cast<unsigned char>(buffer[1])) << 8);
 				if (packet_size <= buffer.size())
 				{
 					objects[key]->ProcessPacket(buffer.data());

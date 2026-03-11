@@ -204,14 +204,17 @@ void GameManager::HandleInput()
 				}
 				// G키로 아이템 줍기 (클라이언트 자체 인벤토리 공간 판단)
 				if (event.key.code == sf::Keyboard::G) {
-					int pickupTemplateId = -1;
+					int latestDropTime   = -1;
+					int latestTemplateId = -1;
 					for (auto& kv : mapItems_) {
 						if (kv.second.x == avatar_.m_x && kv.second.y == avatar_.m_y) {
-							pickupTemplateId = kv.second.template_id;
-							break;
+							if (kv.second.drop_time_ms > latestDropTime) {
+								latestDropTime   = kv.second.drop_time_ms;
+								latestTemplateId = kv.second.template_id;
+							}
 						}
 					}
-					if (pickupTemplateId != -1 && !g_inventoryUI.HasSpaceFor(pickupTemplateId)) {
+					if (latestTemplateId != -1 && !g_inventoryUI.HasSpaceFor(latestTemplateId)) {
 						push_status_message(sf::String(L"[인벤토리] 아이템을 넣을 공간이 부족합니다."));
 					}
 					else {
@@ -220,6 +223,12 @@ void GameManager::HandleInput()
 						p.type = CS_ITEM_PICKUP;
 						SendPacket(&p);
 					}
+				}
+				// O키로 인벤토리 자동 정렬 (인벤토리 열린 상태에서만)
+				if (event.key.code == sf::Keyboard::O) 
+				{
+					if (g_inventoryUI.IsActive())
+						g_inventoryUI.SortItems();
 				}
 				if (event.key.code == sf::Keyboard::P) {
 					isRankingActive_ = !isRankingActive_;
@@ -447,9 +456,10 @@ void GameManager::ProcessPacket(char* ptr)
 	case SC_ADD_MAP_ITEM: {
 		SC_ADD_MAP_ITEM_PACKET* p = reinterpret_cast<SC_ADD_MAP_ITEM_PACKET*>(ptr);
 		MapItemInfo info;
-		info.object_id = p->object_id;
-		info.template_id = p->template_id;
-		info.count = p->count;
+		info.object_id    = p->object_id;
+		info.drop_time_ms = p->drop_time_ms;
+		info.template_id  = p->template_id;
+		info.count        = p->count;
 		info.x = p->x;
 		info.y = p->y;
 

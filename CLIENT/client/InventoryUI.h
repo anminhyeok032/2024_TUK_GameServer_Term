@@ -65,13 +65,14 @@ private:
 	static constexpr int UI_Y = 100;
 	static constexpr int SLOT_SIZE = 40;
 	static constexpr int MARGIN = 2;
+	static constexpr int HEADER_H = 50; // 제목 영역 높이 (2줄 텍스트 수용)
 
 public:
 	InventoryUI();
 	~InventoryUI();
 
 	void Initialize(sf::RenderWindow* window, sf::Font* font);
-	
+
 	// 토글 및 상태 확인
 	void Toggle();
 	bool IsActive() const { return isActive_; }
@@ -90,8 +91,8 @@ public:
 	ClientItemTemplate GetItemTemplate(int tid);
 	bool CanPlace(int startX, int startY, int w, int h, long long excludeUID);
 	bool HasSpaceFor(int template_id);
-	
-	
+	void SortItems(); // O키: 면적 내림차순 자동 정렬 후 서버 전송
+
 	// 서버로 변경사항 전송
 	void SyncToServer();
 };

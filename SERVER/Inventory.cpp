@@ -170,6 +170,49 @@ bool Inventory::MoveItem(long long item_uid, int new_x, int new_y, bool new_rota
 	return PlaceItem(item, new_x, new_y, new_rotated);
 }
 
+void Inventory::ApplySortResult(const std::vector<std::tuple<long long, short, short, bool>>& slots)
+{
+	// 1. 그리드 전체 초기화
+	for (int y = 0; y < INV_MAX_ROW; ++y)
+	{
+		for (int x = 0; x < INV_MAX_COL; ++x)
+		{
+			grid_[y][x] = 0;
+		}
+	}
+	// 2. 클라이언트가 보낸 위치로 각 아이템을 순서대로 재배치
+	for (const auto& s : slots)
+	{
+		long long uid  = std::get<0>(s);
+		short     nx   = std::get<1>(s);
+		short     ny   = std::get<2>(s);
+		bool      rot  = std::get<3>(s);
+
+		auto it = items_.find(uid);
+		if (it == items_.end()) continue;
+
+		Item* item = it->second;
+		ItemTemplate info = GetItemTemplate(item->template_id);
+		int w = rot ? info.height : info.width;
+		int h = rot ? info.width  : info.height;
+
+		// 범위 검사
+		if (nx < 0 || ny < 0 || nx + w > INV_MAX_COL || ny + h > INV_MAX_ROW) continue;
+
+		// 그리드에 기록
+		item->x          = nx;
+		item->y          = ny;
+		item->is_rotated = rot;
+		for (int r = ny; r < ny + h; ++r)
+		{
+			for (int c = nx; c < nx + w; ++c)
+			{
+				grid_[r][c] = uid;
+			}
+		}
+	}
+}
+
 Item* Inventory::RemoveItem(long long item_uid)
 {
 	auto it = items_.find(item_uid);

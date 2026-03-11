@@ -37,9 +37,11 @@ void Player::DoReceive()
 {
 	DWORD recv_flag = 0;
 	memset(&recv_over_.over_, 0, sizeof(recv_over_.over_));
-	recv_over_.wsabuf_.buf = recv_over_.send_buf_ + prev_packet_.size();
-	recv_over_.wsabuf_.len = BUF_SIZE - static_cast<ULONG>(prev_packet_.size());
-	WSARecv(socket_, &recv_over_.wsabuf_, 1, 0, &recv_flag, 
+
+	recv_over_.wsabuf_.buf = recv_over_.send_buf_;
+	recv_over_.wsabuf_.len = BUF_SIZE;
+
+	WSARecv(socket_, &recv_over_.wsabuf_, 1, 0, &recv_flag,
 		&recv_over_.over_, 0);
 	
 }
@@ -494,6 +496,8 @@ int GetNewMapItemId()
 			if (objects[i]->state_ == OS_FREE)
 			{
 				objects[i]->view_list_.clear();
+				objects[i]->current_sector_ = { -99, -99 };
+				objects[i]->around_sector_.clear();
 				return i;
 			}
 		}
@@ -738,8 +742,9 @@ void Player::ProcessPacket(char* packet)
 					std::lock_guard<std::mutex> lock(sector.mut_sector_);
 					for (auto& id : sector.sec_id_)
 					{
-						if (id == id_) continue;
-						if (true == IsPlayer(id)) continue;
+					if (id == id_) continue;
+					if (true == IsPlayer(id)) continue;
+					if (true == IsMapItem(id)) continue;
 
 						{
 							std::lock_guard<std::mutex> ll(objects[id]->mut_state_);
@@ -823,6 +828,21 @@ void Player::ProcessPacket(char* packet)
 			// 현재는 메모리 상에서만 이동
 			// 성공했다면 Redis에도 바로 반영 (Dirty Flag 방식 대신 즉시 반영)
 			if (success) SaveInventoryToRedis();
+			break;
+		}
+		// 아이템 정렬
+		case CS_ITEM_SORT:
+		{
+			CS_ITEM_SORT_PACKET* p = reinterpret_cast<CS_ITEM_SORT_PACKET*>(packet);
+			std::vector<std::tuple<long long, short, short, bool>> slots;
+			slots.reserve(p->item_count);
+			for (int i = 0; i < p->item_count; ++i)
+			{
+				const SortSlot& slot = p->slots[i];
+				slots.emplace_back(slot.item_uid, slot.x, slot.y, slot.is_rotated);
+			}
+			inventory_->ApplySortResult(slots);
+			SaveInventoryToRedis();
 			break;
 		}
 		// 아이템 버리기

@@ -22,7 +22,8 @@ public:
 	}
 	OVER(char* packet)
 	{
-        unsigned short packet_size = reinterpret_cast<unsigned short*>(packet)[0];
+        unsigned short packet_size = static_cast<unsigned short>(static_cast<unsigned char>(packet[0])) |
+            (static_cast<unsigned short>(static_cast<unsigned char>(packet[1])) << 8);
 		wsabuf_.len = packet_size;
 		wsabuf_.buf = send_buf_;
 		ZeroMemory(&over_, sizeof(over_));
