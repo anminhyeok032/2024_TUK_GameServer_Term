@@ -17,7 +17,6 @@ void MapItem::SendAddObjectPacket(int c_id)
 	packet.drop_time_ms = static_cast<int>(ms % INT_MAX);
 	packet.item_uid = item_uid;
 	packet.template_id = template_id;
-	packet.count = count;
 	packet.x = x_;
 	packet.y = y_;
 	

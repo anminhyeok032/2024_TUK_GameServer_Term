@@ -216,19 +216,18 @@ void InventoryUI::SortItems()
 	push_status_message(sf::String(ToSfString("[Inventory] 정렬 성공.")));
 }
 
-void InventoryUI::AddItem(long long uid, int tid, int cnt, int x, int y, bool rot)
+void InventoryUI::AddItem(long long uid, int tid, int x, int y, bool rot)
 {
 	// 중복 UID 방지 - 이미 있으면 무시
 	for (const auto& existing : myItems_) 
 	{
 		if (existing.item_uid == uid) return;
 	}
-	std::cout << "[InventoryUI] Adding item UID " << uid << " (template " << tid << ", count " << cnt << ") at (" << x << "," << y << "), rotated: " << rot << std::endl;
+	std::cout << "[InventoryUI] Adding item UID " << uid << " (template " << tid << ") at (" << x << "," << y << "), rotated: " << rot << std::endl;
 
 	ClientItem item;
 	item.item_uid = uid;
 	item.template_id = tid;
-	item.count = cnt;
 	item.x = x;
 	item.y = y;
 	item.is_rotated = rot;
@@ -304,6 +303,9 @@ void InventoryUI::HandleInput(sf::Event& event)
 				isDragging_ = true;
 				draggingItemUID_ = item.item_uid;
 				dragOffset_ = sf::Vector2f(itemX - mousePos.x, itemY - mousePos.y);
+				dragOrigX_ = item.x;
+				dragOrigY_ = item.y;
+				dragOrigRotated_ = item.is_rotated;
 				break;
 			}
 		}
@@ -351,7 +353,7 @@ void InventoryUI::HandleInput(sf::Event& event)
 							? sf::String("Unknown Item")
 							: ToSfString(dropInfo.name);
 						sf::String dropMsg = sf::String("[Item Drop] ") + dropItemName
-							+ " x" + std::to_string(item->count);
+							+ " x 1";
 						push_status_message(dropMsg);
 
 						// 클라이언트 인벤토리에서 즉시 제거
@@ -359,9 +361,9 @@ void InventoryUI::HandleInput(sf::Event& event)
 						// 버리기는 Dirty Sync 대상이 아니므로 즉시 처리됨
 					}
 					else {
-						// 인벤토리 내인데 공간이 없어서 못 놓는 경우 (원래 자리로)
-						sf::String Msg = ToSfString("아이템을 해당 부분에 놓을 수 없습니다.");
-						push_status_message(Msg);
+						// placement failed inside inventory — restore original rotation
+						item->is_rotated = dragOrigRotated_;
+						push_status_message(sf::String(ToSfString("[Inventory] 아이템을 놓을 수 없습니다.")));
 						//std::cout << "Can't place item there!" << std::endl;
 					}
 				}
@@ -372,7 +374,14 @@ void InventoryUI::HandleInput(sf::Event& event)
 	}
 	// 3. 우클릭 회전
 	else if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Right) {
-		if (!isDragging_) {
+		if (isDragging_) {
+			// 드래그 중: 들고 있는 아이템 회전 (놓을 때 CanPlace로 검증)
+			ClientItem* item = FindItem(draggingItemUID_);
+			if (item) {
+				item->is_rotated = !item->is_rotated;
+			}
+		}
+		else {
 			for (auto& item : myItems_) {
 				float itemX = (float)(UI_X + 10 + item.x * SLOT_SIZE);
 				float itemY = (float)(UI_Y + HEADER_H + item.y * SLOT_SIZE);
@@ -424,9 +433,21 @@ void InventoryUI::Draw()
 	title2.setPosition((float)UI_X + 10.f, (float)UI_Y + 18.f);
 	window_->draw(title2);
 
-	// 그리드
+	// 그리드 — 아이템이 차지하는 칸은 다른 색으로 표시
+	// 1) 점유 맵 계산
+	bool occupied[INV_MAX_ROW][INV_MAX_COL] = {};
+	for (const auto& item : myItems_) {
+		if (isDragging_ && item.item_uid == draggingItemUID_) continue;
+		ClientItemTemplate ti = GetItemTemplate(item.template_id);
+		int iw = item.is_rotated ? ti.h : ti.w;
+		int ih = item.is_rotated ? ti.w : ti.h;
+		for (int ry = item.y; ry < item.y + ih && ry < INV_MAX_ROW; ++ry)
+			for (int rx = item.x; rx < item.x + iw && rx < INV_MAX_COL; ++rx)
+				occupied[ry][rx] = true;
+	}
+
+	// 2) 슬롯 그리기 (빈칸 / 점유칸 색상 구분)
 	sf::RectangleShape slot(sf::Vector2f(SLOT_SIZE - MARGIN * 2.f, SLOT_SIZE - MARGIN * 2.f));
-	slot.setFillColor(sf::Color(100, 100, 100, 150));
 	slot.setOutlineColor(sf::Color::Black);
 	slot.setOutlineThickness(1);
 
@@ -434,6 +455,10 @@ void InventoryUI::Draw()
 		for (int x = 0; x < INV_MAX_COL; ++x) {
 			float slotX = (float)(UI_X + 10 + x * SLOT_SIZE);
 			float slotY = (float)(UI_Y + HEADER_H + y * SLOT_SIZE);
+			if (occupied[y][x])
+				slot.setFillColor(sf::Color(70, 90, 70, 180));
+			else
+				slot.setFillColor(sf::Color(100, 100, 100, 150));
 			slot.setPosition(slotX + MARGIN, slotY + MARGIN);
 			window_->draw(slot);
 		}
@@ -443,6 +468,12 @@ void InventoryUI::Draw()
 	sf::RectangleShape itemBox;
 	itemBox.setOutlineColor(sf::Color::Yellow);
 	itemBox.setOutlineThickness(1);
+
+	// 아이템 경계선용 사각형
+	sf::RectangleShape itemBorder;
+	itemBorder.setFillColor(sf::Color::Transparent);
+	itemBorder.setOutlineColor(sf::Color(200, 200, 100, 200));
+	itemBorder.setOutlineThickness(1.f);
 
 	for (const auto& item : myItems_) {
 		if (isDragging_ && item.item_uid == draggingItemUID_) continue;
@@ -467,12 +498,16 @@ void InventoryUI::Draw()
 		}
 		else
 		{
-			// fallback: 회색 사각형
 			itemBox.setFillColor(sf::Color(100, 100, 100, 200));
 			itemBox.setSize(sf::Vector2f(drawW, drawH));
 			itemBox.setPosition(itemX + MARGIN, itemY + MARGIN);
 			window_->draw(itemBox);
 		}
+
+		// 아이템 경계선
+		itemBorder.setSize(sf::Vector2f(drawW, drawH));
+		itemBorder.setPosition(itemX + MARGIN, itemY + MARGIN);
+		window_->draw(itemBorder);
 	}
 
 	// 드래그 중인 아이템

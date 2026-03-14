@@ -220,7 +220,6 @@ struct SC_ADD_MAP_ITEM_PACKET {
 	int drop_time_ms; // 같은 타일 우선순위 판별위한
 	long long item_uid;
 	int template_id;
-	int count;
 	short x, y;
 };
 
@@ -238,7 +237,6 @@ struct SC_GET_ITEM_PACKET {
 	char type;
 	long long item_uid;
 	int template_id;
-	int count;
 	short x, y; // 인벤토리 어느 칸에 들어왔는지
 	bool is_rotated;
 };
@@ -247,7 +245,6 @@ struct SC_GET_ITEM_PACKET {
 struct InventorySlot {
 	long long item_uid;
 	int template_id;
-	int count;
 	short x, y;
 	bool is_rotated;
 };

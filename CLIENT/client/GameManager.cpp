@@ -459,7 +459,6 @@ void GameManager::ProcessPacket(char* ptr)
 		info.object_id    = p->object_id;
 		info.drop_time_ms = p->drop_time_ms;
 		info.template_id  = p->template_id;
-		info.count        = p->count;
 		info.x = p->x;
 		info.y = p->y;
 
@@ -493,7 +492,6 @@ void GameManager::ProcessPacket(char* ptr)
 		g_inventoryUI.AddItem(
 			p->item_uid,
 			p->template_id,
-			p->count,
 			p->x,
 			p->y,
 			p->is_rotated
@@ -502,7 +500,7 @@ void GameManager::ProcessPacket(char* ptr)
 		// 획득 상태 메시지
 		const ItemInfo* itemInfo = ItemDatabase::GetInstance().Get(p->template_id);
 		sf::String itemName = itemInfo ? ToSfString(itemInfo->name) : sf::String("Unknown Item");
-		sf::String msg = sf::String("[Item Get] ") + itemName + " x" + to_string(p->count);
+		sf::String msg = sf::String("[Item Get] ") + itemName ;
 		chatHistory_.push_back(msg);
 		if (chatHistory_.size() > 5) chatHistory_.erase(chatHistory_.begin());
 		break;
@@ -515,7 +513,6 @@ void GameManager::ProcessPacket(char* ptr)
 			g_inventoryUI.AddItem(
 				slot.item_uid,
 				slot.template_id,
-				slot.count,
 				slot.x,
 				slot.y,
 				slot.is_rotated

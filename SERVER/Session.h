@@ -66,6 +66,8 @@ public:
 
 	virtual void DBLogin(SQLHDBC& hdbc) {};
 	virtual void DBLogout(SQLHDBC& hdbc) {};
+	virtual bool DBSaveItem(SQLHDBC& hdbc, long long item_uid) { return false; };
+	virtual bool DBDeleteItem(SQLHDBC& hdbc, long long item_uid) { return false; };
 	virtual void SaveToRedis() {};
 
 

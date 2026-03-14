@@ -17,6 +17,7 @@ std::map <std::pair<int, int>, Sector> g_ObjectSector;
 concurrency::concurrent_priority_queue<EVENT> g_event_queue;
 concurrency::concurrent_queue<DBRequest> g_db_request_queue;
 ObjectPool<OVER> g_sendPool(1000); // Send Pool
+SnowflakeIDGenerator g_snowflake(0); // Snowflake ID Generator (server_id=0)
 
 // 시야가 클라이언트에게 보일 사각형에 포함되는가
 bool CanSee(int a, int b)

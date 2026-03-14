@@ -28,7 +28,6 @@ inline sf::String ToSfString(const std::string& cp949str)
 struct ClientItem {
 	long long item_uid;
 	int template_id;
-	int count;
 	int x, y;
 	bool is_rotated;
 	sf::Sprite sprite;
@@ -54,6 +53,8 @@ private:
 	bool isDragging_;
 	long long draggingItemUID_;
 	sf::Vector2f dragOffset_;
+	int dragOrigX_, dragOrigY_;
+	bool dragOrigRotated_;
 
 	// 동기화 관련
 	bool isDirty_;
@@ -85,7 +86,7 @@ public:
 	void HandleInput(sf::Event& event);
 
 	// 아이템 관리
-	void AddItem(long long uid, int tid, int cnt, int x, int y, bool rot);
+	void AddItem(long long uid, int tid, int x, int y, bool rot);
 	void RemoveItem(long long uid); // 아이템 제거 함수 추가
 	ClientItem* FindItem(long long uid);
 	ClientItemTemplate GetItemTemplate(int tid);

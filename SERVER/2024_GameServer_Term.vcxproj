@@ -152,12 +152,16 @@
     <ClInclude Include="protocol.h" />
     <ClInclude Include="RankingManager.h" />
     <ClInclude Include="Session.h" />
+    <ClInclude Include="SnowflakeID.h" />
   </ItemGroup>
   <ItemGroup>
     <Library Include="lua54.lib" />
   </ItemGroup>
   <ItemGroup>
     <None Include="npc.lua" />
+    <None Include="sql\sp_Inventory.sql" />
+    <None Include="sql\sp_UserLogin.sql" />
+    <None Include="sql\sp_UserLogout.sql" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

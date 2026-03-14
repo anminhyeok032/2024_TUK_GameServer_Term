@@ -294,11 +294,8 @@ void Npc::DropItem()
 			mapItem->x_ = x_;
 			mapItem->y_ = y_;
 			
-			// 고유 UID 생성 (임시로 랜덤값 사용, 실제론 DB 시퀀스나 UUID 필요)
-			// 여기서는 간단히 시간 기반 값 사용
-			mapItem->item_uid = std::chrono::system_clock::now().time_since_epoch().count(); 
+			mapItem->item_uid = g_snowflake.Generate();
 			mapItem->template_id = dropTemplateId;
-			mapItem->count = 1;
 			mapItem->state_ = OS_INGAME;
 			mapItem->drop_time = std::chrono::system_clock::now();
 			mapItem->PutInSector();

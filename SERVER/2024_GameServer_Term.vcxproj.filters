@@ -27,6 +27,9 @@
     <Filter Include="Script">
       <UniqueIdentifier>{c2182181-7212-4212-7212-721272127212}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Core\DB\Stored Procedure">
+      <UniqueIdentifier>{953f2005-801b-4b7f-b56f-1201ca12e6a6}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="MainServer.cpp">
@@ -94,10 +97,22 @@
     <ClInclude Include="RankingManager.h">
       <Filter>Game\System</Filter>
     </ClInclude>
+    <ClInclude Include="SnowflakeID.h">
+      <Filter>Game\Object</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="npc.lua">
       <Filter>Script</Filter>
+    </None>
+    <None Include="sql\sp_Inventory.sql">
+      <Filter>Core\DB\Stored Procedure</Filter>
+    </None>
+    <None Include="sql\sp_UserLogin.sql">
+      <Filter>Core\DB\Stored Procedure</Filter>
+    </None>
+    <None Include="sql\sp_UserLogout.sql">
+      <Filter>Core\DB\Stored Procedure</Filter>
     </None>
   </ItemGroup>
   <ItemGroup>

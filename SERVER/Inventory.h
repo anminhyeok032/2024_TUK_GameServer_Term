@@ -30,6 +30,9 @@ public:
 	// 아이템 제거
 	Item* RemoveItem(long long item_uid);
 
+	// 해당 아이템 UID를 가진 아이템 객체 반환 (없으면 nullptr)
+	Item* FindItem(long long item_uid);
+
 	// 해당 위치에 아이템을 놓을 수 있는지 검사
 	bool CanPlace(int x, int y, int w, int h, long long exclude_item_uid = 0);
 
@@ -39,6 +42,9 @@ public:
 	// 정렬 결과 일괄 적용 (그리드 전체 초기화 후 재배치)
 	// slots: {item_uid, x, y, is_rotated} 리스트
 	void ApplySortResult(const std::vector<std::tuple<long long, short, short, bool>>& slots);
+
+	// 아이템 전체 목록 반환 (SQL 저장용)
+	std::vector<Item*> GetAllItems() const;
 
 	// Redis 저장을 위한 데이터 반환 (items_ 캡슐화 유지)
 	// 반환값: vector of {ItemUID, ValueString}

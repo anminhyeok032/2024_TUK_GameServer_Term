@@ -25,7 +25,6 @@ class Item {
 public:
 	long long item_uid;  // 고유 ID (DB Primary Key)
 	int template_id;     // 어떤 아이템인가?
-	int count;           // 개수
 
 	// 위치 정보
 	short x;
@@ -33,7 +32,7 @@ public:
 	bool is_rotated;     // 회전 여부 (가로/세로 바뀜)
 
 public:
-	Item() : item_uid(0), template_id(0), count(0), x(-1), y(-1), is_rotated(false) {}
+	Item() : item_uid(0), template_id(0), x(-1), y(-1), is_rotated(false) {}
 	~Item() {}
 
 	// 회전 상태를 고려한 실제 너비 반환

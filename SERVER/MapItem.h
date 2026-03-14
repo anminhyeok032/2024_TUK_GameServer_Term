@@ -10,13 +10,12 @@ class MapItem : public SESSION
 public:
 	long long item_uid;  // 실제 아이템 데이터 ID
 	int template_id;     // 아이템 종류
-	int count;           // 개수
-	
+		
 	// 생성 시간 (나중에 일정 시간 지나면 사라지게)
 	std::chrono::system_clock::time_point drop_time;
 
 public:
-	MapItem() : item_uid(0), template_id(0), count(0) {
+	MapItem() : item_uid(0), template_id(0) {
 		drop_time = std::chrono::system_clock::now();
 		visual_ = -1; // 맵 아이템을 나타내는 특별한 visual ID
 	}

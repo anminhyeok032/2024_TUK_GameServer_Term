@@ -114,5 +114,11 @@ void ProcessDBRequest(const DBRequest& request, SQLHDBC& hdbc)
 		if (objects[request.id]->state_ == OS_INGAME)
 			objects[request.id]->SaveToRedis();
 		break;
+	case DBRequest::SAVE_ITEM:
+		objects[request.id]->DBSaveItem(hdbc, request.item_uid);
+		break;
+	case DBRequest::DELETE_ITEM:
+		objects[request.id]->DBDeleteItem(hdbc, request.item_uid);
+		break;
 	}
 }

@@ -21,6 +21,7 @@
 
 #include "include/lua.hpp"
 #include "Constants.h"
+#include "SnowflakeID.h"
 
 #pragma comment(lib, "WS2_32.lib")
 #pragma comment(lib, "MSWSock.lib")
@@ -63,6 +64,7 @@ void disconnect(int c_id);
 
 
 extern std::unique_ptr<cpp_redis::client> g_redis_client;
+extern SnowflakeIDGenerator g_snowflake;
 
 // 
 std::string WStringToString(const std::wstring& wstr);
@@ -72,9 +74,10 @@ bool ConnectWithRedis();
 // DB struct queue
 struct DBRequest
 {
-	enum DBType { LOGIN, LOGOUT, SAVE_REDIS };
+	enum DBType { LOGIN, LOGOUT, SAVE_REDIS, SAVE_ITEM, DELETE_ITEM };
 	DBType db_type;
 	int id;
+	long long item_uid; // SAVE_ITEM, DELETE_ITEM
 };
 extern concurrency::concurrent_queue<DBRequest> g_db_request_queue;
 

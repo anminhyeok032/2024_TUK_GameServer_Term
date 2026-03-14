@@ -1,10 +1,10 @@
-CREATE PROCEDURE sp_UserLogin
+ï»¿CREATE PROCEDURE sp_UserLogin
     @user_id NCHAR(20)
 AS
 BEGIN
     SET NOCOUNT ON;
 
-    -- ±âÁ¸ À¯Àú È®ÀÎ
+    -- ê¸°ì¡´ ìœ ì € í™•ì¸
     IF EXISTS (SELECT 1 FROM user_term_table WHERE user_id = @user_id)
     BEGIN
         SELECT user_id, user_x, user_y, user_max_hp, user_exp, user_level, user_visual
@@ -13,7 +13,7 @@ BEGIN
     END
     ELSE
     BEGIN
-        -- ½Å±Ô À¯ÀúÀÏ½Ã »ğÀÔ ÈÄ ¹İÈ¯
+        -- ì‹ ê·œ ìœ ì €ì¼ì‹œ ì‚½ì… í›„ ë°˜í™˜
         INSERT INTO user_term_table (user_id, user_x, user_y, user_max_hp, user_exp, user_level, user_visual)
         VALUES (@user_id, 0, 0, 100, 0, 1, 0);
 

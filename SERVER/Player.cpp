@@ -187,7 +187,6 @@ void Player::SendGetItemPacket(Item* item)
 	packet.type = SC_GET_ITEM;
 	packet.item_uid = item->item_uid;
 	packet.template_id = item->template_id;
-	packet.count = item->count;
 	packet.x = item->x;
 	packet.y = item->y;
 	packet.is_rotated = item->is_rotated;
@@ -215,13 +214,12 @@ void Player::SendInventorySyncPacket()
 	int idx = 0;
 	for (auto& pair : inv_data)
 	{
-		int tid, cnt, x, y, rot;
-		if (sscanf_s(pair.second.c_str(), "%d:%d:%d:%d:%d", &tid, &cnt, &x, &y, &rot) == 5)
+		int tid, x, y, rot;
+		if (sscanf_s(pair.second.c_str(), "%d:%d:%d:%d", &tid, &x, &y, &rot) == 4)
 		{
 			InventorySlot& slot = packet->items[idx++];
 			slot.item_uid   = std::stoll(pair.first);
 			slot.template_id = tid;
-			slot.count       = cnt;
 			slot.x           = (short)x;
 			slot.y           = (short)y;
 			slot.is_rotated  = (bool)rot;
@@ -338,6 +336,12 @@ void Player::DBLogin(SQLHDBC& hdbc)
 			LoadInventoryFromRedis();
 		}
 
+		// Redis에 인벤토리가 없으면 SQL에서 로드 (폴백)
+		if (inventory_ && inventory_->GetAllItems().empty())
+		{
+			DBLoadInventory(hdbc);
+		}
+
 		// 로그인 성공 정보를 Redis에도 갱신
 		SaveToRedis();
 
@@ -445,8 +449,7 @@ void Player::DBLogout(SQLHDBC& hdbc)
 		// 접속중 상태만 갱신하고 TTL을 7일로 재설정함 -> 7일 초과시 삭제
 		SaveToRedis();
 
-		// SQL 저장을 완료하고 종료되므로 Redis 캐시 제거
-		//DeleteFromRedis();
+		DBSaveInventory(hdbc);
 
 		name_[0] = 0;
 	}
@@ -868,10 +871,10 @@ void Player::ProcessPacket(char* packet)
 			mapItem->y_ = y_;
 			mapItem->item_uid = droppedItem->item_uid;
 			mapItem->template_id = droppedItem->template_id; 
-			mapItem->count = droppedItem->count;
 			mapItem->state_ = OS_INGAME;
 			mapItem->PutInSector();
 
+			long long dropped_uid = droppedItem->item_uid;
 			delete droppedItem;	// 원본 삭제
 
 			// 주변 플레이어에게 알림 + Player의 view_list_에 MapItem 등록
@@ -893,6 +896,7 @@ void Player::ProcessPacket(char* packet)
 			}
 
 			SaveInventoryToRedis();
+			g_db_request_queue.push({ DBRequest::DELETE_ITEM, id_, dropped_uid });
 			break;
 		}
 		// 아이템 줍기
@@ -936,7 +940,6 @@ void Player::ProcessPacket(char* packet)
 				Item* newItem = new Item();
 				newItem->item_uid = target->item_uid;
 				newItem->template_id = target->template_id;
-				newItem->count = target->count;
 				// 인벤토리에 추가 (자동 빈칸)
 				if (inventory_->AddItem(newItem)) 
 				{
@@ -968,8 +971,9 @@ void Player::ProcessPacket(char* packet)
 					g_ObjectSector[sec].mut_sector_.unlock();
 
 					SaveInventoryToRedis();
-				} 
-				else 
+					g_db_request_queue.push({ DBRequest::SAVE_ITEM, id_, newItem->item_uid });
+				}
+				else
 				{
 					// 인벤 꽉 참 - 선점한 state_를 OS_INGAME으로 복구
 					{
@@ -1051,14 +1055,13 @@ void Player::LoadInventoryFromRedis()
 			std::string item_uid_str = arr[i].as_string();
 			std::string val_str = arr[i + 1].as_string();
 
-			// 파싱 "TID:CNT:X:Y:R"
-			int tid, cnt, x, y, rot;
-			if (sscanf_s(val_str.c_str(), "%d:%d:%d:%d:%d", &tid, &cnt, &x, &y, &rot) == 5)
+			// 파싱 "TID:X:Y:R"
+			int tid, x, y, rot;
+			if (sscanf_s(val_str.c_str(), "%d:%d:%d:%d", &tid, &x, &y, &rot) == 4)
 			{
 				Item* newItem = new Item();
 				newItem->item_uid = std::stoll(item_uid_str);
 				newItem->template_id = tid;
-				newItem->count = cnt;
 				newItem->x = (short)x;
 				newItem->y = (short)y;
 				newItem->is_rotated = (bool)rot;
@@ -1077,4 +1080,255 @@ void Player::DeleteFromRedis()
 	key = "User:" + key;
 	g_redis_client->del({ key });
 	g_redis_client->commit();
+}
+
+void Player::DBSaveInventory(SQLHDBC& hdbc)
+{
+	if (!inventory_) return;
+
+	std::wstring w_user_id(name_, name_ + strlen(name_));
+	std::vector<Item*> items = inventory_->GetAllItems();
+
+	SQLHSTMT hstmt = AllocateStatement(hdbc);
+	if (!hstmt) return;
+
+	// 트랜잭션 시작
+	// BEGIN ~ COMMIT 사이의 모든 쿼리를 하나의 단위로 묶음
+	// 중간 실패 시 ROLLBACK → DELETE만 된 채로 남는 상황 방지
+	SQLRETURN retcode = SQLExecDirect(hstmt, (SQLWCHAR*)L"BEGIN TRANSACTION", SQL_NTS);
+	if (retcode != SQL_SUCCESS && retcode != SQL_SUCCESS_WITH_INFO)
+	{
+		DisplayDBError(hstmt, SQL_HANDLE_STMT, retcode);
+		SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
+		return;
+	}
+	SQLCloseCursor(hstmt);
+
+	// DELETE
+	retcode = SQLPrepare(hstmt,
+		(SQLWCHAR*)L"DELETE FROM user_inventory_table WHERE user_id = ?", SQL_NTS);
+	if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO)
+	{
+		SQLLEN userIdLen = w_user_id.size() * sizeof(WCHAR);
+		SQLBindParameter(hstmt, 1, SQL_PARAM_INPUT, SQL_C_WCHAR, SQL_WCHAR,
+			20, 0, (SQLWCHAR*)w_user_id.c_str(), 0, &userIdLen);
+
+		retcode = SQLExecute(hstmt);
+		if (retcode != SQL_SUCCESS && retcode != SQL_SUCCESS_WITH_INFO)
+		{
+			DisplayDBError(hstmt, SQL_HANDLE_STMT, retcode);
+			SQLExecDirect(hstmt, (SQLWCHAR*)L"ROLLBACK TRANSACTION", SQL_NTS);
+			SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
+			return;
+		}
+	}
+	SQLCloseCursor(hstmt);
+	SQLFreeStmt(hstmt, SQL_RESET_PARAMS);
+
+	// INSERT
+	if (!items.empty())
+	{
+		retcode = SQLPrepare(hstmt,
+			(SQLWCHAR*)L"INSERT INTO user_inventory_table "
+			L"(user_id, item_uid, template_id, pos_x, pos_y, is_rotated) "
+			L"VALUES (?, ?, ?, ?, ?, ?)", SQL_NTS);
+
+		if (retcode != SQL_SUCCESS && retcode != SQL_SUCCESS_WITH_INFO)
+		{
+			DisplayDBError(hstmt, SQL_HANDLE_STMT, retcode);
+			SQLExecDirect(hstmt, (SQLWCHAR*)L"ROLLBACK TRANSACTION", SQL_NTS);
+			SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
+			return;
+		}
+
+		for (Item* item : items)
+		{
+			SQLBIGINT   uid = item->item_uid;
+			SQLINTEGER  tid = item->template_id;
+			SQLSMALLINT px = item->x;
+			SQLSMALLINT py = item->y;
+			SQLSMALLINT rot = item->is_rotated ? 1 : 0;
+			SQLLEN      userIdLen = w_user_id.size() * sizeof(WCHAR);
+
+			SQLBindParameter(hstmt, 1, SQL_PARAM_INPUT, SQL_C_WCHAR, SQL_WCHAR,
+				20, 0, (SQLWCHAR*)w_user_id.c_str(), 0, &userIdLen);
+			SQLBindParameter(hstmt, 2, SQL_PARAM_INPUT, SQL_C_SBIGINT, SQL_BIGINT,
+				0, 0, &uid, 0, NULL);
+			SQLBindParameter(hstmt, 3, SQL_PARAM_INPUT, SQL_C_SLONG, SQL_INTEGER,
+				0, 0, &tid, 0, NULL);
+			SQLBindParameter(hstmt, 4, SQL_PARAM_INPUT, SQL_C_SSHORT, SQL_SMALLINT,
+				0, 0, &px, 0, NULL);
+			SQLBindParameter(hstmt, 5, SQL_PARAM_INPUT, SQL_C_SSHORT, SQL_SMALLINT,
+				0, 0, &py, 0, NULL);
+			SQLBindParameter(hstmt, 6, SQL_PARAM_INPUT, SQL_C_SSHORT, SQL_SMALLINT,
+				0, 0, &rot, 0, NULL);
+
+			retcode = SQLExecute(hstmt);
+			if (retcode != SQL_SUCCESS && retcode != SQL_SUCCESS_WITH_INFO)
+			{
+				DisplayDBError(hstmt, SQL_HANDLE_STMT, retcode);
+				// ROLLBACK: 지금까지의 DELETE + INSERT 전부 취소
+				SQLExecDirect(hstmt, (SQLWCHAR*)L"ROLLBACK TRANSACTION", SQL_NTS);
+				SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
+				return; // ← 반드시 즉시 return (핸들 재사용 방지)
+			}
+			SQLCloseCursor(hstmt);
+			SQLFreeStmt(hstmt, SQL_RESET_PARAMS);
+		}
+	}
+
+	// COMMIT 
+	// 여기까지 왔다면 DELETE + 전체 INSERT 모두 성공
+	// COMMIT으로 DB에 확정 반영
+	SQLExecDirect(hstmt, (SQLWCHAR*)L"COMMIT TRANSACTION", SQL_NTS);
+	SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
+
+	std::cout << "[" << name_ << "] Inventory saved ("
+		<< items.size() << " items)" << std::endl;
+}
+
+void Player::DBLoadInventory(SQLHDBC& hdbc)
+{
+	if (!inventory_) return;
+
+	SQLHSTMT hstmt = AllocateStatement(hdbc);
+	if (!hstmt) return;
+
+	std::wstring w_user_id(name_, name_ + strlen(name_));
+	SQLLEN userIdLen = SQL_NTS;
+
+	SQLRETURN retcode = SQLPrepare(hstmt,
+		(SQLWCHAR*)L"{CALL sp_LoadInventory(?)}", SQL_NTS);
+	if (retcode != SQL_SUCCESS && retcode != SQL_SUCCESS_WITH_INFO)
+	{
+		DisplayDBError(hstmt, SQL_HANDLE_STMT, retcode);
+		SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
+		return;
+	}
+
+	// SQL_WCHAR: NCHAR(20) 컬럼과 타입 일치
+	SQLBindParameter(hstmt, 1, SQL_PARAM_INPUT, SQL_C_WCHAR, SQL_WCHAR,
+		20, 0, (SQLWCHAR*)w_user_id.c_str(), 0, &userIdLen);
+
+	retcode = SQLExecute(hstmt);
+	if (retcode != SQL_SUCCESS && retcode != SQL_SUCCESS_WITH_INFO)
+	{
+		DisplayDBError(hstmt, SQL_HANDLE_STMT, retcode);
+		SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
+		return;
+	}
+
+	SQLBIGINT   d_uid;
+	SQLINTEGER  d_tid;
+	SQLSMALLINT d_x, d_y, d_rot;
+	SQLLEN cb_uid, cb_tid, cb_x, cb_y, cb_rot;
+
+	SQLBindCol(hstmt, 1, SQL_C_SBIGINT, &d_uid, 0, &cb_uid);
+	SQLBindCol(hstmt, 2, SQL_C_SLONG, &d_tid, 0, &cb_tid);
+	SQLBindCol(hstmt, 3, SQL_C_SSHORT, &d_x, 0, &cb_x);
+	SQLBindCol(hstmt, 4, SQL_C_SSHORT, &d_y, 0, &cb_y);
+	SQLBindCol(hstmt, 5, SQL_C_SSHORT, &d_rot, 0, &cb_rot);
+
+	int loaded = 0;
+	while (SQLFetch(hstmt) == SQL_SUCCESS)
+	{
+		Item* newItem = new Item();
+		newItem->item_uid = d_uid;
+		newItem->template_id = (int)d_tid;
+		newItem->x = d_x;
+		newItem->y = d_y;
+		newItem->is_rotated = (d_rot != 0);
+
+		// PlaceItem 실패 시 메모리 해제 (누수 방지)
+		if (!inventory_->PlaceItem(newItem, d_x, d_y, newItem->is_rotated))
+		{
+			std::cout << "[WARN] DBLoadInventory: PlaceItem failed uid="
+				<< newItem->item_uid << " pos=(" << d_x << "," << d_y << ")\n";
+			delete newItem;
+			continue;
+		}
+		loaded++;
+	}
+
+	SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
+	if (loaded > 0) std::cout << "[" << name_ << "] Inventory loaded from SQL (" << loaded << " items)\n";
+}
+
+bool Player::DBSaveItem(SQLHDBC& hdbc, long long item_uid)
+{
+	if (!inventory_) return false;
+
+	// O(1) 직접 조회 (GetAllItems + 루프 제거)
+	Item* target = inventory_->FindItem(item_uid);
+	if (!target) return false;
+
+	SQLHSTMT hstmt = AllocateStatement(hdbc);
+	if (!hstmt) return false;
+
+	std::wstring w_user_id(name_, name_ + strlen(name_));
+	SQLLEN userIdLen = SQL_NTS;
+
+	SQLRETURN retcode = SQLPrepare(hstmt,
+		(SQLWCHAR*)L"{CALL sp_SaveInventory(?, ?, ?, ?, ?, ?)}", SQL_NTS);
+	if (retcode != SQL_SUCCESS && retcode != SQL_SUCCESS_WITH_INFO)
+	{
+		DisplayDBError(hstmt, SQL_HANDLE_STMT, retcode);
+		SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
+		return false;
+	}
+
+	SQLBIGINT   uid = target->item_uid;
+	SQLINTEGER  tid = target->template_id;
+	SQLSMALLINT px = target->x;
+	SQLSMALLINT py = target->y;
+	SQLSMALLINT rot = target->is_rotated ? 1 : 0;
+
+	SQLBindParameter(hstmt, 1, SQL_PARAM_INPUT, SQL_C_WCHAR, SQL_WCHAR,
+		20, 0, (SQLWCHAR*)w_user_id.c_str(), 0, &userIdLen);
+	SQLBindParameter(hstmt, 2, SQL_PARAM_INPUT, SQL_C_SBIGINT, SQL_BIGINT, 0, 0, &uid, 0, NULL);
+	SQLBindParameter(hstmt, 3, SQL_PARAM_INPUT, SQL_C_SLONG, SQL_INTEGER, 0, 0, &tid, 0, NULL);
+	SQLBindParameter(hstmt, 4, SQL_PARAM_INPUT, SQL_C_SSHORT, SQL_SMALLINT, 0, 0, &px, 0, NULL);
+	SQLBindParameter(hstmt, 5, SQL_PARAM_INPUT, SQL_C_SSHORT, SQL_SMALLINT, 0, 0, &py, 0, NULL);
+	SQLBindParameter(hstmt, 6, SQL_PARAM_INPUT, SQL_C_SSHORT, SQL_SMALLINT, 0, 0, &rot, 0, NULL);
+
+	retcode = SQLExecute(hstmt);
+	bool success = (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO);
+	if (!success)
+		DisplayDBError(hstmt, SQL_HANDLE_STMT, retcode);
+
+	SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
+	return success;
+}
+
+bool Player::DBDeleteItem(SQLHDBC& hdbc, long long item_uid)
+{
+	SQLHSTMT hstmt = AllocateStatement(hdbc);
+	if (!hstmt) return false;
+
+	std::wstring w_user_id(name_, name_ + strlen(name_));
+	SQLLEN userIdLen = SQL_NTS;
+
+	SQLRETURN retcode = SQLPrepare(hstmt,
+		(SQLWCHAR*)L"{CALL sp_DeleteItem(?, ?)}", SQL_NTS);
+	if (retcode != SQL_SUCCESS && retcode != SQL_SUCCESS_WITH_INFO)
+	{
+		DisplayDBError(hstmt, SQL_HANDLE_STMT, retcode);
+		SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
+		return false;
+	}
+
+	SQLBIGINT uid = item_uid;
+
+	SQLBindParameter(hstmt, 1, SQL_PARAM_INPUT, SQL_C_WCHAR, SQL_WCHAR,
+		20, 0, (SQLWCHAR*)w_user_id.c_str(), 0, &userIdLen);
+	SQLBindParameter(hstmt, 2, SQL_PARAM_INPUT, SQL_C_SBIGINT, SQL_BIGINT,
+		0, 0, &uid, 0, NULL);
+
+	retcode = SQLExecute(hstmt);
+	bool success = (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO);
+	if (!success)
+		DisplayDBError(hstmt, SQL_HANDLE_STMT, retcode);
+
+	SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
+	return success;
 }

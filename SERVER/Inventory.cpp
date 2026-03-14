@@ -237,6 +237,24 @@ Item* Inventory::RemoveItem(long long item_uid)
 	return item;
 }
 
+Item* Inventory::FindItem(long long item_uid)
+{
+	auto it = items_.find(item_uid);
+	if (it == items_.end()) return nullptr;
+	return it->second;
+}
+
+std::vector<Item*> Inventory::GetAllItems() const
+{
+	std::vector<Item*> result;
+	result.reserve(items_.size());
+	for (const auto& pair : items_)
+	{
+		result.push_back(pair.second);
+	}
+	return result;
+}
+
 std::vector<std::pair<std::string, std::string>> Inventory::GetInventoryDataForRedis()
 {
 	std::vector<std::pair<std::string, std::string>> data;
@@ -245,9 +263,8 @@ std::vector<std::pair<std::string, std::string>> Inventory::GetInventoryDataForR
 	for (const auto& pair : items_) 
 	{
 		Item* item = pair.second;
-		// Format: "TemplateID:Count:X:Y:Rotated"
+		// Format: "TemplateID:X:Y:Rotated"
 		std::string val = std::to_string(item->template_id) + ":" +
-			std::to_string(item->count) + ":" +
 			std::to_string(item->x) + ":" +
 			std::to_string(item->y) + ":" +
 			std::to_string(item->is_rotated);

@@ -1,5 +1,5 @@
-CREATE PROCEDURE sp_UserLogout
-    @user_id   NVARCHAR(50),
+﻿CREATE PROCEDURE sp_UserLogout
+    @user_id   NCHAR(20),
     @user_x    INT,
     @user_y    INT,
     @user_max_hp INT,

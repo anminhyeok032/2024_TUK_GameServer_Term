@@ -53,6 +53,12 @@ public:
 	void SaveInventoryToRedis();
 	void LoadInventoryFromRedis();
 
+	// Inventory SQL Func
+	void DBSaveInventory(SQLHDBC& hdbc);
+	void DBLoadInventory(SQLHDBC& hdbc);
+	bool DBSaveItem(SQLHDBC& hdbc, long long item_uid) override;
+	bool DBDeleteItem(SQLHDBC& hdbc, long long item_uid) override;
+
 	void ProcessPacket(char* packet) override;
 
 	void DeleteFromRedis();
