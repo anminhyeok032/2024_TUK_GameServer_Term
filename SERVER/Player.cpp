@@ -827,9 +827,6 @@ void Player::ProcessPacket(char* packet)
 			CS_ITEM_MOVE_PACKET* p = reinterpret_cast<CS_ITEM_MOVE_PACKET*>(packet);
 			bool success = inventory_->MoveItem(p->item_uid, p->new_x, p->new_y, p->is_rotated);
 			
-			// TODO: 결과를 클라이언트에 전송 (SC_ITEM_MOVE_RESULT_PACKET)
-			// 현재는 메모리 상에서만 이동
-			// 성공했다면 Redis에도 바로 반영 (Dirty Flag 방식 대신 즉시 반영)
 			if (success) SaveInventoryToRedis();
 			break;
 		}
@@ -1066,7 +1063,14 @@ void Player::LoadInventoryFromRedis()
 				newItem->y = (short)y;
 				newItem->is_rotated = (bool)rot;
 
-				inventory_->PlaceItem(newItem, x, y, newItem->is_rotated);
+				// PlaceItem 실패 시 즉시 해제 (누수 방지)
+				if (!inventory_->PlaceItem(newItem, x, y, newItem->is_rotated))
+				{
+					std::cout << "[WARN] LoadInventoryFromRedis: PlaceItem failed"
+						<< " uid=" << newItem->item_uid
+						<< " pos=(" << x << "," << y << ")\n";
+					delete newItem;
+				}
 			}
 		}
 	}
@@ -1170,7 +1174,7 @@ void Player::DBSaveInventory(SQLHDBC& hdbc)
 				// ROLLBACK: 지금까지의 DELETE + INSERT 전부 취소
 				SQLExecDirect(hstmt, (SQLWCHAR*)L"ROLLBACK TRANSACTION", SQL_NTS);
 				SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
-				return; // ← 반드시 즉시 return (핸들 재사용 방지)
+				return; // 핸들 재사용 방지
 			}
 			SQLCloseCursor(hstmt);
 			SQLFreeStmt(hstmt, SQL_RESET_PARAMS);
@@ -1206,7 +1210,6 @@ void Player::DBLoadInventory(SQLHDBC& hdbc)
 		return;
 	}
 
-	// SQL_WCHAR: NCHAR(20) 컬럼과 타입 일치
 	SQLBindParameter(hstmt, 1, SQL_PARAM_INPUT, SQL_C_WCHAR, SQL_WCHAR,
 		20, 0, (SQLWCHAR*)w_user_id.c_str(), 0, &userIdLen);
 
@@ -1258,7 +1261,6 @@ bool Player::DBSaveItem(SQLHDBC& hdbc, long long item_uid)
 {
 	if (!inventory_) return false;
 
-	// O(1) 직접 조회 (GetAllItems + 루프 제거)
 	Item* target = inventory_->FindItem(item_uid);
 	if (!target) return false;
 

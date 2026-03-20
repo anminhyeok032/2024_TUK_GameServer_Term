@@ -332,8 +332,8 @@ void GameManager::ProcessPacket(char* ptr)
 			avatar_.show();
 		}
 		else {
-			if (p->visual == 0) players_[p->id] = OBJECT{ *pieceTex_, 192, 0, 64, 64 };
-			else if (p->visual == 1) players_[p->id] = OBJECT{ *npcTex_, 128, 0, 64, 64 }; // Agro
+			if (p->visual == OT_PLAYER) players_[p->id] = OBJECT{ *pieceTex_, 192, 0, 64, 64 };
+			else if (p->visual == OT_NPC_AGRO) players_[p->id] = OBJECT{ *npcTex_, 128, 0, 64, 64 }; // Agro
 			else players_[p->id] = OBJECT{ *npcTex_, 0, 0, 64, 64 }; // Peace
 
 			players_[p->id].move(p->x, p->y);

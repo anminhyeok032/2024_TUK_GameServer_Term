@@ -27,43 +27,37 @@ ItemTemplate Inventory::GetItemTemplate(int template_id)
 {
 	ItemTemplate info;
 	info.template_id = template_id;
-	info.width = 1; 
+	info.width = 1;
 	info.height = 1;
 
 	switch (template_id)
 	{
-		// ---- 2x3 ----
-	case 1001:                          // 대검
-		info.width = 2; info.height = 3; break;
-
-		// ---- 2x2 ----
-	case 1002:                          // 방패
-		info.width = 2; info.height = 2; break;
-
-		// ---- 1x2 ----
-	case 1003:                          // 장검
-	case 1004:                          // 단검
-	case 1005:                          // 창
-	case 1006:                          // 단창
+		// ---- 1x2 (Height > 32px) ----
+	case 1001:                                  // 대검 (10x47)
+	case 1003:                                  // 장검 (10x46)
+	case 1005:                                  // 창 (12x41)
+	case 1006:                                  // 단창 (10x39)
 		info.width = 1; info.height = 2; break;
 
-		// ---- 2x1 ----
-	case 1013:                          // 완드
-	case 1014:                          // 막대
+		// ---- 2x1 (Width 근접, 가로형) ----
+	case 1013:                                  // 완드 (26x12)
 		info.width = 2; info.height = 1; break;
 
 		// ---- 1x1 (기본값과 동일, 명시적 나열) ----
-	case 1007:                          // 표창
-	case 1008:                          // 단도
-	case 1009:                          // 곡검
-	case 1010:                          // 송곳
-	case 1011:                          // 바늘
-	case 1012:                          // 건틀릿
-	case 1015:                          // 부적
-	case 1016:                          // 반지
-	case 1017:                          // 메달
-	case 1018:                          // 구슬
-	case 1019:                          // 핀
+	case 1002:                                  // 방패 (18x24)
+	case 1004:                                  // 단검 (16x30)
+	case 1007:                                  // 표창 (16x16)
+	case 1008:                                  // 단도 (10x23)
+	case 1009:                                  // 곡검 (10x32)
+	case 1010:                                  // 송곳 (6x27)
+	case 1011:                                  // 바늘 (6x16)
+	case 1012:                                  // 건틀릿 (16x31)
+	case 1014:                                  // 막대 (14x30)
+	case 1015:                                  // 부적 (11x13)
+	case 1016:                                  // 반지 (14x16)
+	case 1017:                                  // 메달 (14x16)
+	case 1018:                                  // 둔기 (16x31)
+	case 1019:                                  // 활 (12x32)
 		info.width = 1; info.height = 1; break;
 	}
 	return info;

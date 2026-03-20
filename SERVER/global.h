@@ -121,7 +121,9 @@ enum class AttackType : char
 enum OBJECT_TYPE
 {
 	OT_PLAYER = 0,
-	OT_NPC
+	OT_NPC_AGRO = 1,
+	OT_NPC_PEACE = 2,
+	OT_MAP_ITEM = -1
 };
 
 enum EVENT_TYPE

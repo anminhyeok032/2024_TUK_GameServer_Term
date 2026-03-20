@@ -41,3 +41,11 @@ constexpr auto WINDOW_HEIGHT = SCREEN_WIDTH * TILE_WIDTH;
 constexpr auto MAP_SIZE = 200;
 constexpr auto MAP_WIDTH = WINDOW_WIDTH - MAP_SIZE;
 constexpr auto MAP_HEIGHT = 0;
+// 오브젝트 종류 구분 (서버와 동일)
+enum OBJECT_TYPE
+{
+	OT_PLAYER = 0,
+	OT_NPC_AGRO = 1,
+	OT_NPC_PEACE = 2,
+	OT_MAP_ITEM = -1
+};

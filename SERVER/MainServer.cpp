@@ -266,12 +266,12 @@ void InitializeObjects()
 		if (i > MAX_NPC / 2)
 		{
 			sprintf_s(objects[i]->name_, "Agro %d", i);
-			objects[i]->visual_ = 1;
+			objects[i]->visual_ = OT_NPC_AGRO;
 		}
 		else
 		{
 			sprintf_s(objects[i]->name_, "Peace %d", i);
-			objects[i]->visual_ = 2;
+			objects[i]->visual_ = OT_NPC_PEACE;
 		}
 		objects[i]->x_ = rand() % W_WIDTH;
 		objects[i]->y_ = rand() % W_HEIGHT;

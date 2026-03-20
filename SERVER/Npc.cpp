@@ -176,13 +176,13 @@ void Npc::WakeUpNpc(int p_id)
 	OVER* over = g_sendPool.Acquire();
 	switch (visual_)
 	{
-	case 1:	// Agro
+	case OT_NPC_AGRO:
 	{
 		over->comp_key_ = KEY_NPC_MOVE_TO_PLAYER;
 		over->ai_target_c_id_ = p_id;
 		break;
 	}
-	case 2: // peace
+	case OT_NPC_PEACE:
 	{
 		over->comp_key_ = KEY_NPC_RANDOM_MOVE;
 		over->ai_target_c_id_ = 0;
@@ -270,11 +270,11 @@ void Npc::DropItem()
 	// NPC 종류에 따른 드롭 아이템 결정
 	switch (visual_) 
 	{
-	case 1: // Agro NPC
+	case OT_NPC_AGRO:
 		// 30% 확률로 대검(1001)
 		if (rand() % 100 < 30) dropTemplateId = 1001; 
 		break;
-	case 2: // Peace NPC
+	case OT_NPC_PEACE:
 		// 50% 확률로 방패(1002)
 		if (rand() % 100 < 50) dropTemplateId = 1002;
 		break;

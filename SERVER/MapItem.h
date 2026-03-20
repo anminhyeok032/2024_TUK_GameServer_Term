@@ -17,7 +17,7 @@ public:
 public:
 	MapItem() : item_uid(0), template_id(0) {
 		drop_time = std::chrono::system_clock::now();
-		visual_ = -1; // 맵 아이템을 나타내는 특별한 visual ID
+		visual_ = OT_MAP_ITEM;
 	}
 	~MapItem() {}
 
