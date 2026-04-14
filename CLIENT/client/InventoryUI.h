@@ -77,6 +77,7 @@ public:
 	// 토글 및 상태 확인
 	void Toggle();
 	bool IsActive() const { return isActive_; }
+	bool IsDirty() const { return isDirty_; }
 
 	// 그리기 및 업데이트
 	void Draw();

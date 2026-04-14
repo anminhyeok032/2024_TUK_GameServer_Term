@@ -204,6 +204,12 @@ void GameManager::HandleInput()
 				}
 				// G키로 아이템 줍기 (클라이언트 자체 인벤토리 공간 판단)
 				if (event.key.code == sf::Keyboard::G) {
+					// 미동기화 상태라면 줍기 전 강제 동기화
+					if (g_inventoryUI.IsDirty()) 
+					{
+						g_inventoryUI.SyncToServer(); // 즉시 전송
+					}
+
 					int latestDropTime   = -1;
 					int latestTemplateId = -1;
 					for (auto& kv : mapItems_) {
