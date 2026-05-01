@@ -1,7 +1,9 @@
 # IOCP 기반 MMORPG 게임 서버
 
-> 대규모 동시 접속과 실시간 전투 처리를 위한 C++ IOCP MMORPG 서버  
-![Image](https://github.com/user-attachments/assets/657a8f98-df12-4bb2-904b-fcf83112358d)
+> 대규모 동시 접속과 실시간 전투 처리를 위한 C++ IOCP MMORPG 서버
+> ##  프로젝트 게임 플레이영상
+[![Watch the Demo Video](https://github.com/user-attachments/assets/657a8f98-df12-4bb2-904b-fcf83112358d)](https://youtu.be/MOAtFs1bvG0)
+
 
 ## 프로젝트 개요
 
