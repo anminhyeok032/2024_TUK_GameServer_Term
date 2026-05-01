@@ -19,7 +19,7 @@ void send_packet(void* packet) {
 
 // InventoryUI에서 채팅 히스토리에 상태 메시지를 추가하는 콜백
 void push_status_message(const sf::String& msg) {
-	g_gameManager.chatHistory_.push_back(msg);
+	g_gameManager.chatHistory_.push_back({msg, std::chrono::system_clock::now()});
 	if (g_gameManager.chatHistory_.size() > 5)
 		g_gameManager.chatHistory_.erase(g_gameManager.chatHistory_.begin());
 }
@@ -133,8 +133,21 @@ void GameManager::Run()
 	char PLAYER_ID[BUF_SIZE];
 	cout << "Enter IP Address : ";
 	cin.getline(SERVER_ADDR, BUF_SIZE);
-	cout << "Enter Player ID : ";
-	cin.getline(PLAYER_ID, BUF_SIZE);
+
+	while (true)
+	{
+		cout << "Enter Player ID : ";
+		cin.getline(PLAYER_ID, BUF_SIZE);
+
+		if (PLAYER_ID[0] == '\0')
+		{
+			cout << "불가능한 아이디입니다. 다시 입력해주세요." << endl;
+		}
+		else
+		{
+			break;
+		}
+	}
 
 	if (!Initialize()) return;
 	if (!Connect(SERVER_ADDR)) return;
@@ -285,7 +298,7 @@ void GameManager::HandleInput()
 
 					// 내 채팅도 히스토리에 추가
 					sf::String msg = sf::String("[") + avatar_.name + "] : " + chatInput_;
-					chatHistory_.push_back(msg);
+					chatHistory_.push_back({msg, std::chrono::system_clock::now()});
 					if (chatHistory_.size() > 5) chatHistory_.erase(chatHistory_.begin());
 
 					chatInput_.clear();
@@ -327,6 +340,11 @@ void GameManager::ProcessPacket(char* ptr)
 		hpBar_.setSize(sf::Vector2f(((float)avatar_.hp / avatar_.max_hp) * 200, 30));
 		levelText_.setString("Level : " + to_string(avatar_.level));
 		avatar_.show();
+		break;
+	}
+	case SC_LOGIN_FAIL: {
+		cout << "접속에 실패하였습니다." << endl;
+		exit(0);
 		break;
 	}
 	case SC_ADD_OBJECT: {
@@ -374,7 +392,7 @@ void GameManager::ProcessPacket(char* ptr)
 		// 영문만 사용되므로 sf::String 직접 생성 가능
 		sf::String msg = sf::String("[") + players_[p->id].name + "] : " + p->mess;
 		if (p->id != myId_) {
-			chatHistory_.push_back(msg);
+			chatHistory_.push_back({msg, std::chrono::system_clock::now()});
 			if (chatHistory_.size() > 5) chatHistory_.erase(chatHistory_.begin());
 		}
 		break;
@@ -392,8 +410,7 @@ void GameManager::ProcessPacket(char* ptr)
 	case SC_ATTACK: {
 		SC_ATTACK_PACKET* p = reinterpret_cast<SC_ATTACK_PACKET*>(ptr);
 		sf::String msg;
-		int damage = 0;
-		if (players_.count(p->damaged_id)) damage = players_[p->damaged_id].hp - p->hp;
+		int damage = p->damage;
 
 		// 공격 이펙트 생성
 		auto now = chrono::system_clock::now();
@@ -446,7 +463,7 @@ void GameManager::ProcessPacket(char* ptr)
 				msg = sf::String(players_[p->attacker_id].name) + " killed " + players_[p->damaged_id].name + " and get EXP - " + to_string(p->exp);
 			}
 		}
-		chatHistory_.push_back(msg);
+		chatHistory_.push_back({msg, std::chrono::system_clock::now()});
 		if (chatHistory_.size() > 5) chatHistory_.erase(chatHistory_.begin());
 		break;
 	}
@@ -507,7 +524,7 @@ void GameManager::ProcessPacket(char* ptr)
 		const ItemInfo* itemInfo = ItemDatabase::GetInstance().Get(p->template_id);
 		sf::String itemName = itemInfo ? ToSfString(itemInfo->name) : sf::String("Unknown Item");
 		sf::String msg = sf::String("[Item Get] ") + itemName ;
-		chatHistory_.push_back(msg);
+		chatHistory_.push_back({msg, std::chrono::system_clock::now()});
 		if (chatHistory_.size() > 5) chatHistory_.erase(chatHistory_.begin());
 		break;
 	}
@@ -686,8 +703,11 @@ void GameManager::Draw()
 		window_->draw(chatText_);
 	}
 	float yOffset = 530;
+	auto draw_now = std::chrono::system_clock::now();
 	for (auto it = chatHistory_.rbegin(); it != chatHistory_.rend() && yOffset > 0; ++it) {
-		sf::Text t(*it, fontKo_, 20);
+		if (draw_now - it->time > std::chrono::seconds(5)) break; // 5초 지난 메시지는 그리지 않음
+
+		sf::Text t(it->text, fontKo_, 20);
 		t.setFillColor(sf::Color::White);
 		t.setPosition(5, yOffset);
 		window_->draw(t);

@@ -62,7 +62,11 @@ public:
 	sf::RectangleShape chatBox_;
 	sf::Text chatText_;
 	std::string chatInput_;
-	std::vector<sf::String> chatHistory_;
+	struct ChatMessage {
+		sf::String text;
+		std::chrono::system_clock::time_point time;
+	};
+	std::vector<ChatMessage> chatHistory_;
 	bool isChatActive_;
 
 	// 랭킹

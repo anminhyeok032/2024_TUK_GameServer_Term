@@ -215,13 +215,13 @@ void disconnect(int c_id)
 			objects[id]->SendRemoveObjectPacket(c_id);
 		}
 	}
-	objects[c_id]->CloseSocket();
-	g_db_request_queue.push({ DBRequest::LOGOUT, c_id });
-
 	{
 		std::lock_guard<std::mutex> ll(objects[c_id]->mut_state_);
 		objects[c_id]->state_ = OS_FREE;
 	}
+
+	objects[c_id]->CloseSocket();
+	g_db_request_queue.push({ DBRequest::LOGOUT, c_id });
 	objects[c_id]->current_sector_ = { -99, -99 };
 	objects[c_id]->around_sector_.clear();
 

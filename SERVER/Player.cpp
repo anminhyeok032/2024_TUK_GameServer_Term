@@ -96,7 +96,12 @@ void Player::DoSend(void* packet)
 		int err = WSAGetLastError();
 		if (err != WSA_IO_PENDING)
 		{
-			std::cout << "[Error] WSASend Failed: " << err << std::endl;
+			// 클라이언트 종료 등으로 인해 소켓이 닫힌 정상적인 상황의 에러는 출력하지 않음
+			if (err != WSAENOTSOCK && err != WSAECONNRESET && err != WSAECONNABORTED)
+			{
+				std::cout << "[Error] WSASend Failed: " << err << std::endl;
+			}
+			g_sendPool.Release(sdata);
 		}
 	}
 }
@@ -288,6 +293,7 @@ void Player::DBLogin(SQLHDBC& hdbc)
 				
 			SendLoginFailPacket();
 			SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
+			name_[0] = 0; // 로그인 실패 처리: 로그아웃 시 데이터 저장 방지
 			return;
 		}
 	}
@@ -387,6 +393,15 @@ void Player::DBLogin(SQLHDBC& hdbc)
 					} 
 					else 
 					{
+						// NPC일 경우 접속한 플레이어를 인식하고 바로 깨어나도록 처리
+						if (IsNpc(objects[id]->id_))
+						{
+							Npc* npc = dynamic_cast<Npc*>(objects[id].get());
+							if (npc)
+							{
+								npc->WakeUpNpc(id_);
+							}
+						}
 						objects[id]->SendAddObjectPacket(id_); // Other -> Me
 					}
 					
@@ -410,6 +425,9 @@ void Player::DBLogin(SQLHDBC& hdbc)
 
 void Player::DBLogout(SQLHDBC& hdbc)
 {
+	// 로그인에 실패했거나 접속만 하고 패킷을 보내지 않은 클라이언트는 무시
+	if (name_[0] == 0) return;
+
 	SQLHSTMT hstmt = AllocateStatement(hdbc);
 	SQLRETURN retcode;
 
@@ -517,6 +535,14 @@ void Player::ProcessPacket(char* packet)
 		case CS_LOGIN:
 		{
 			CS_LOGIN_PACKET* p = reinterpret_cast<CS_LOGIN_PACKET*>(packet);
+			
+			// 클라이언트가 강제로 빈 문자열 아이디를 보내는 경우 (비정상 접근 차단)
+			if (p->name[0] == '\0')
+			{
+				SendLoginFailPacket();
+				return;
+			}
+
 			strcpy_s(name_, p->name);
 			last_action_time_ = std::chrono::system_clock::now();
 			g_db_request_queue.push({ DBRequest::LOGIN, id_ });
@@ -623,8 +649,17 @@ void Player::ProcessPacket(char* packet)
 					} 
 					else
 					{
+						bool is_ingame = false;
+						{
+							std::lock_guard<std::mutex> ll(objects[ano_id]->mut_state_);
+							is_ingame = (OS_INGAME == objects[ano_id]->state_);
+						}
+
+						if (is_ingame)
+						{
+							objects[ano_id]->SendRemoveObjectPacket(id_);
+						}
 						SendRemoveObjectPacket(ano_id);
-						objects[ano_id]->SendRemoveObjectPacket(id_);
 					}
 				}
 			}

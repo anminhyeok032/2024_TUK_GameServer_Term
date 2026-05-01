@@ -87,12 +87,19 @@ void Npc::Move(int dir)
 	if (new_x < 0 || new_x >= W_WIDTH || new_y < 0 || new_y >= W_HEIGHT)
 		return;
 
+	// 이동 전 시야 리스트 복사
+	mut_view_.lock();
+	std::unordered_set<int> prev_viewlist = view_list_;
+	mut_view_.unlock();
+
 	// 좌표 갱신
 	x_ = new_x;
 	y_ = new_y;
 
 	// 섹터 갱신 (섹터가 바뀌었으면 이동 처리)
 	PutInSector();
+
+	std::unordered_set<int> curr_viewlist;
 
 	// 주변 플레이어에게 이동 패킷 전송 (Broadcasting)
 	// 내 주변 섹터를 뒤져서 플레이어를 찾음
@@ -104,11 +111,54 @@ void Npc::Move(int dir)
 			// 플레이어가 아니면 스킵
 			if (false == IsPlayer(p_id)) continue;
 
+			// 상태 체크 추가 (안전성 강화)
+			{
+				std::lock_guard<std::mutex> ll(objects[p_id]->mut_state_);
+				if (OS_INGAME != objects[p_id]->state_) continue;
+			}
+
 			// 시야 내에 있는 플레이어에게만 전송
 			if (CanSee(id_, p_id)) {
-				// 해당 플레이어에게 NPC(나)가 이동했다는 패킷을 보냄
-				objects[p_id]->SendMovePacket(id_);
+				curr_viewlist.insert(p_id);
 			}
+		}
+	}
+
+	// 뷰리스트 비교를 통한 시야 처리
+	for (int p_id : curr_viewlist)
+	{
+		if (0 == prev_viewlist.count(p_id))
+		{
+			// 새롭게 시야에 들어온 플레이어에게 AddObject 패킷 전송 및 시야 등록
+			objects[p_id]->SendAddObjectPacket(id_);
+			SendAddObjectPacket(p_id);
+		}
+		else
+		{
+			// 해당 플레이어에게 NPC(나)가 이동했다는 패킷을 보냄
+			objects[p_id]->SendMovePacket(id_);
+		}
+	}
+
+	for (int p_id : prev_viewlist)
+	{
+		if (0 == curr_viewlist.count(p_id))
+		{
+			// 시야에서 벗어난 플레이어의 상태 확인
+			bool is_ingame = false;
+			{
+				std::lock_guard<std::mutex> ll(objects[p_id]->mut_state_);
+				is_ingame = (OS_INGAME == objects[p_id]->state_);
+			}
+
+			if (is_ingame)
+			{
+				// 정상적으로 게임 중인 플레이어에게만 RemoveObject 패킷 전송
+				objects[p_id]->SendRemoveObjectPacket(id_);
+			}
+			
+			// 내(NPC) 시야에서는 무조건 제거
+			SendRemoveObjectPacket(p_id);
 		}
 	}
 }
