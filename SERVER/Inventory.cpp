@@ -190,8 +190,9 @@ void Inventory::ApplySortResult(const std::vector<std::tuple<long long, short, s
 		int w = rot ? info.height : info.width;
 		int h = rot ? info.width  : info.height;
 
-		// 범위 검사
-		if (nx < 0 || ny < 0 || nx + w > INV_MAX_COL || ny + h > INV_MAX_ROW) continue;
+		// 범위 + 겹침 검사 (CanPlace가 둘 다 수행)
+		// 겹침 검사가 없으면 클라이언트가 모든 아이템을 한 칸에 겹쳐 보낼 수 있다
+		if (!CanPlace(nx, ny, w, h)) continue;
 
 		// 그리드에 기록
 		item->x          = nx;

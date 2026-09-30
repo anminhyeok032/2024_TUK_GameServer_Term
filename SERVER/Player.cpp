@@ -38,8 +38,9 @@ void Player::DoReceive()
 	DWORD recv_flag = 0;
 	memset(&recv_over_.over_, 0, sizeof(recv_over_.over_));
 
-	recv_over_.wsabuf_.buf = recv_over_.send_buf_;
-	recv_over_.wsabuf_.len = BUF_SIZE;
+	// 이전에 남은 미완성 패킷(prev_size_ 바이트) 바로 뒤에 이어서 받는다
+	recv_over_.wsabuf_.buf = recv_over_.send_buf_ + prev_size_;
+	recv_over_.wsabuf_.len = static_cast<ULONG>(BUF_SIZE - prev_size_);
 
 	WSARecv(socket_, &recv_over_.wsabuf_, 1, 0, &recv_flag,
 		&recv_over_.over_, 0);
@@ -240,6 +241,12 @@ void Player::SendInventorySyncPacket()
 void Player::DBLogin(SQLHDBC& hdbc)
 {
 	SQLHSTMT hstmt = AllocateStatement(hdbc);
+	if (!hstmt)
+	{
+		name_[0] = 0; // 로그인 실패 처리: 로그아웃 시 데이터 저장 방지
+		SendLoginFailPacket();
+		return;
+	}
 	SQLRETURN retcode;
 
 	// Stored Procedure 호출 준비
@@ -248,6 +255,7 @@ void Player::DBLogin(SQLHDBC& hdbc)
 	{
 		DisplayDBError(hstmt, SQL_HANDLE_STMT, retcode);
 		SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
+		name_[0] = 0; // 로그인 실패 처리: 로그아웃 시 데이터 저장 방지
 		SendLoginFailPacket();
 		return;
 	}
@@ -265,21 +273,22 @@ void Player::DBLogin(SQLHDBC& hdbc)
 	{
 		DisplayDBError(hstmt, SQL_HANDLE_STMT, retcode);
 		SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
+		name_[0] = 0; // 로그인 실패 처리: 로그아웃 시 데이터 저장 방지
 		SendLoginFailPacket();
 		return;
 	}
 
 	// 결과 바인딩
-	SQLSMALLINT d_x, d_y, d_max_hp, d_level, d_visual;
-	SQLINTEGER d_exp;
+	SQLSMALLINT d_x, d_y, d_visual;
+	SQLINTEGER d_exp, d_max_hp, d_level; // 멤버 변수(int)와 같은 4바이트로 수신
 	SQLLEN cbId = 0, cb_x = 0, cb_y = 0, cb_max_hp = 0, cb_exp = 0, cb_level = 0, cb_visual = 0;
 
 	SQLBindCol(hstmt, 1, SQL_C_WCHAR, dId, NAME_LEN * sizeof(SQLWCHAR), &cbId);
 	SQLBindCol(hstmt, 2, SQL_C_SSHORT, &d_x, 0, &cb_x);
 	SQLBindCol(hstmt, 3, SQL_C_SSHORT, &d_y, 0, &cb_y);
-	SQLBindCol(hstmt, 4, SQL_C_SSHORT, &d_max_hp, 0, &cb_max_hp);
+	SQLBindCol(hstmt, 4, SQL_C_SLONG, &d_max_hp, 0, &cb_max_hp);
 	SQLBindCol(hstmt, 5, SQL_C_SLONG, &d_exp, 0, &cb_exp);
-	SQLBindCol(hstmt, 6, SQL_C_SSHORT, &d_level, 0, &cb_level);
+	SQLBindCol(hstmt, 6, SQL_C_SLONG, &d_level, 0, &cb_level);
 	SQLBindCol(hstmt, 7, SQL_C_SSHORT, &d_visual, 0, &cb_visual);
 
 	
@@ -323,7 +332,7 @@ void Player::DBLogin(SQLHDBC& hdbc)
 			auto reply = future_reply.get();
 			if (reply.is_array() && reply.as_array().size() > 0)
 			{
-				std::cout << "[Recovery] Redis에서 최신 데이터로 복구 : " << name_ << std::endl;
+				//std::cout << "[Recovery] Redis에서 최신 데이터로 복구 : " << name_ << std::endl;
 
 				auto arr = reply.as_array();
 				for (size_t i = 0; i < arr.size(); i += 2) {
@@ -429,6 +438,7 @@ void Player::DBLogout(SQLHDBC& hdbc)
 	if (name_[0] == 0) return;
 
 	SQLHSTMT hstmt = AllocateStatement(hdbc);
+	if (!hstmt) return;
 	SQLRETURN retcode;
 
 	std::wstring w_user_id(name_, name_ + strlen(name_));
@@ -448,11 +458,11 @@ void Player::DBLogout(SQLHDBC& hdbc)
 		&x_, 0, NULL);
 	SQLBindParameter(hstmt, 3, SQL_PARAM_INPUT, SQL_C_SSHORT, SQL_INTEGER, 0, 0,
 		&y_, 0, NULL);
-	SQLBindParameter(hstmt, 4, SQL_PARAM_INPUT, SQL_C_SSHORT, SQL_INTEGER, 0, 0,
+	SQLBindParameter(hstmt, 4, SQL_PARAM_INPUT, SQL_C_SLONG, SQL_INTEGER, 0, 0,
 		&max_hp_, 0, NULL);
 	SQLBindParameter(hstmt, 5, SQL_PARAM_INPUT, SQL_C_SLONG, SQL_INTEGER, 0, 0,
 		&exp_, 0, NULL);
-	SQLBindParameter(hstmt, 6, SQL_PARAM_INPUT, SQL_C_SSHORT, SQL_INTEGER, 0, 0,
+	SQLBindParameter(hstmt, 6, SQL_PARAM_INPUT, SQL_C_SLONG, SQL_INTEGER, 0, 0,
 		&level_, 0, NULL);
 
 	// 실행
@@ -476,7 +486,7 @@ void Player::DBLogout(SQLHDBC& hdbc)
 		DisplayDBError(hstmt, SQL_HANDLE_STMT, retcode);
 	}
 
-	SQLFreeHandle(SQL_HANDLE_STMT, hdbc);
+	SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
 }
 
 void Player::SendAttackPacket(int attacker_id, int damaged_id, int exp, char attack_type, char direction, int damage)
@@ -527,14 +537,17 @@ int GetNewMapItemId()
 }
 
 
-void Player::ProcessPacket(char* packet)
+void Player::ProcessPacket(char* packet, unsigned short packet_size)
 {
 	switch (packet[2])
 	{
 		// 로그인 패킷 처리
 		case CS_LOGIN:
 		{
+			if (packet_size < sizeof(CS_LOGIN_PACKET)) return;
 			CS_LOGIN_PACKET* p = reinterpret_cast<CS_LOGIN_PACKET*>(packet);
+			// 널 종단 강제 - 없으면 아래 strcpy_s가 abort()로 프로세스를 종료시킨다
+			p->name[NAME_SIZE - 1] = '\0';
 			
 			// 클라이언트가 강제로 빈 문자열 아이디를 보내는 경우 (비정상 접근 차단)
 			if (p->name[0] == '\0')
@@ -552,6 +565,7 @@ void Player::ProcessPacket(char* packet)
 		// 이동 패킷 처리
 		case CS_MOVE:
 		{
+			if (packet_size < sizeof(CS_MOVE_PACKET)) return;
 			CS_MOVE_PACKET* p = reinterpret_cast<CS_MOVE_PACKET*>(packet);
 			last_move_time_ = p->move_time;
 			if (last_action_time_ + std::chrono::seconds(1) > std::chrono::system_clock::now())
@@ -675,7 +689,10 @@ void Player::ProcessPacket(char* packet)
 		// 채팅 패킷 처리
 		case CS_CHAT:
 		{
+			if (packet_size < sizeof(CS_CHAT_PACKET)) return;
 			CS_CHAT_PACKET* p = reinterpret_cast<CS_CHAT_PACKET*>(packet);
+			// 널 종단 강제 - 없으면 cout이 힙을 읽어 출력하고 SendChatPacket의 strcpy_s가 abort()한다
+			p->mess[CHAT_SIZE - 1] = '\0';
 			std::cout << "Chat : [" << name_ << "] : " << p->mess << std::endl;
 			
 			for (auto& player : g_player_list)
@@ -688,6 +705,7 @@ void Player::ProcessPacket(char* packet)
 		// 공격처리
 		case CS_ATTACK:
 		{
+			if (packet_size < sizeof(CS_ATTACK_PACKET)) return;
 			CS_ATTACK_PACKET* p = reinterpret_cast<CS_ATTACK_PACKET*>(packet);
 
 			if (last_action_time_ + std::chrono::seconds(1) > std::chrono::system_clock::now())
@@ -809,7 +827,7 @@ void Player::ProcessPacket(char* packet)
 								{
 									level_++;
 									exp_ -= required_exp;
-									std::cout << "Level up - " << level_ << "!" << std::endl;
+									//std::cout << "Level up - " << level_ << "!" << std::endl;
 									g_db_request_queue.push({ DBRequest::SAVE_REDIS, id_ });
 								}
 								SendStatChangePacket();
@@ -859,6 +877,7 @@ void Player::ProcessPacket(char* packet)
 		// 아이템 이동 패킷 처리
 		case CS_ITEM_MOVE:
 		{
+			if (packet_size < sizeof(CS_ITEM_MOVE_PACKET)) return;
 			CS_ITEM_MOVE_PACKET* p = reinterpret_cast<CS_ITEM_MOVE_PACKET*>(packet);
 			bool success = inventory_->MoveItem(p->item_uid, p->new_x, p->new_y, p->is_rotated);
 			
@@ -868,7 +887,17 @@ void Player::ProcessPacket(char* packet)
 		// 아이템 정렬
 		case CS_ITEM_SORT:
 		{
+			// 고정 헤더(size + type + item_count = 7바이트)
+			const size_t header_size = offsetof(CS_ITEM_SORT_PACKET, slots);
+			if (packet_size < header_size) return;
 			CS_ITEM_SORT_PACKET* p = reinterpret_cast<CS_ITEM_SORT_PACKET*>(packet);
+
+			// 인벤토리 칸 수(100)를 넘는 개수는 존재할 수 없다.
+			// 검증 없이 reserve하면 수십 GB 할당 시도 -> bad_alloc -> 프로세스 종료
+			if (p->item_count < 0 || p->item_count > INV_MAX_COL * INV_MAX_ROW) return;
+			// 선언한 개수만큼의 SortSlot이 실제로 도착했는지 확인
+			if (packet_size < header_size + sizeof(SortSlot) * static_cast<size_t>(p->item_count)) return;
+
 			std::vector<std::tuple<long long, short, short, bool>> slots;
 			slots.reserve(p->item_count);
 			for (int i = 0; i < p->item_count; ++i)
@@ -883,6 +912,7 @@ void Player::ProcessPacket(char* packet)
 		// 아이템 버리기
 		case CS_ITEM_DROP:
 		{
+			if (packet_size < sizeof(CS_ITEM_DROP_PACKET)) return;
 			CS_ITEM_DROP_PACKET* p = reinterpret_cast<CS_ITEM_DROP_PACKET*>(packet);
 
 			int map_id = GetNewMapItemId();

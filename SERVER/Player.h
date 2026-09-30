@@ -59,7 +59,7 @@ public:
 	bool DBSaveItem(SQLHDBC& hdbc, long long item_uid) override;
 	bool DBDeleteItem(SQLHDBC& hdbc, long long item_uid) override;
 
-	void ProcessPacket(char* packet) override;
+	void ProcessPacket(char* packet, unsigned short packet_size) override;
 
 	void DeleteFromRedis();
 };

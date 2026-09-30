@@ -115,7 +115,7 @@ void Worker()
 				objects[client_id]->id_ = client_id;
 				static_cast<Player*>(objects[client_id].get())->InitInventory();
 				objects[client_id]->name_[0] = 0;
-				objects[client_id]->prev_packet_.clear();
+				objects[client_id]->prev_size_ = 0;
 				objects[client_id]->visual_ = 0;
 				objects[client_id]->SetSocket(g_client_socket);
 				objects[client_id]->PutInSector();
@@ -140,28 +140,46 @@ void Worker()
 		}
 		case KEY_RECV:
 		{
-			auto& buffer = objects[key]->prev_packet_;
-			int prev_size = static_cast<int>(buffer.size());
-			buffer.insert(buffer.end(),
-				ex_over->send_buf_ + prev_size,
-				ex_over->send_buf_ + prev_size + bytes);
+			// 수신 버퍼 내 재조립
+			char* buf = ex_over->send_buf_;
+			int data_size = objects[key]->prev_size_ + static_cast<int>(bytes);
+			int offset = 0;
 
-			while (buffer.size() >= 2)
+			bool broken_stream = false;
+			while (data_size - offset >= 3)		// 최소 패킷 = size(2) + type(1)
 			{
+				char* packet = buf + offset;
 				uint16_t packet_size = static_cast<uint16_t>(
-					static_cast<unsigned char>(buffer[0])) |
+					static_cast<unsigned char>(packet[0])) |
 					(static_cast<uint16_t>(
-						static_cast<unsigned char>(buffer[1])) << 8);
-				if (packet_size <= buffer.size())
+						static_cast<unsigned char>(packet[1])) << 8);
+
+				// 정상 클라이언트가 보낼 수 없는 크기
+				if (packet_size < 3 || packet_size > BUF_SIZE)
 				{
-					objects[key]->ProcessPacket(buffer.data());
-					buffer.erase(buffer.begin(), buffer.begin() + packet_size);
-				}
-				else
-				{
+					broken_stream = true;
 					break;
 				}
+				if (packet_size > data_size - offset) break;	// 아직 덜 왔음
+
+				objects[key]->ProcessPacket(packet, packet_size);
+				offset += packet_size;
 			}
+
+			if (broken_stream)
+			{
+				// 프레임 경계를 잃었으므로 복구 불가 -> 연결 종료
+				// 끊은 세션에 DoReceive를 다시 걸지 않도록 여기서 break
+				disconnect(static_cast<int>(key));
+				break;
+			}
+
+			// 남은 미완성 패킷 버퍼 맨 앞으로 당기기
+			int remain = data_size - offset;
+			if (remain > 0 && offset > 0)
+				memmove(buf, buf + offset, remain);
+			objects[key]->prev_size_ = remain;
+
 			objects[key]->DoReceive();
 			break;
 		}

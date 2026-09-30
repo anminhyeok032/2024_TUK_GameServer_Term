@@ -22,8 +22,9 @@ public:
 	std::set<std::pair<int, int>> around_sector_;
 	std::unordered_set<int> view_list_;
 
-	// packet 조립용 버퍼
-	std::vector<char> prev_packet_;
+	// packet 재조립: recv_over_.send_buf_ 앞쪽에 남아 있는 미완성 패킷의 바이트 수
+	// DoReceive()는 send_buf_ + prev_size_ 위치에 이어서 수신한다
+	int prev_size_;
 
 	// mutex
 	std::mutex mut_view_;	// view_list_에 대한 mutex
@@ -43,7 +44,7 @@ public:
 		hp_ = max_hp_ = visual_ = 0;
 		name_[0] = 0;
 		state_ = OS_FREE;
-		prev_packet_.clear();
+		prev_size_ = 0;
 		current_sector_ = { -99, -99 };
 	}
 	virtual ~SESSION() {} // 가상 소멸자 (중요)
@@ -62,7 +63,7 @@ public:
 	// 공격 패킷 인자 추가 (시각화용, damage 추가)
 	virtual void SendAttackPacket(int attacker_id, int damaged_id, int exp, char attack_type, char direction, int damage) {}
 	
-	virtual void ProcessPacket(char* packet) {};
+	virtual void ProcessPacket(char* packet, unsigned short packet_size) {};
 
 	virtual void DBLogin(SQLHDBC& hdbc) {};
 	virtual void DBLogout(SQLHDBC& hdbc) {};
