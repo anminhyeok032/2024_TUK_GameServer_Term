@@ -5,7 +5,7 @@ class Npc : public SESSION
 {
 public:
 	int start_x_, start_y_;
-	lua_State* L_;
+	lua_State* L_ = nullptr;	// 사용자 정의 생성자는 멤버를 0으로 채우지 않으므로 명시적으로 초기화
 	std::mutex mut_lua_;
 	std::atomic_bool active_;
 

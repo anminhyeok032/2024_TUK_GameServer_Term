@@ -24,20 +24,19 @@ void SESSION::PutInSector()
 		return; // 같다면 아무것도 하지 않고 반환
 	}
 
+	// 객체는 항상 current_sector_ 섹터 하나에만 들어 있으므로 다른 섹터를 뒤질 필요가 없다.
+	// 덮어쓰기 전에 이전 섹터를 기억해 둔다.
+	std::pair<int, int> old_sector = current_sector_;
 	current_sector_ = new_sector;
-	for (auto& sector : g_ObjectSector)
-	{
-		if (sector.second.sec_id_.find(id_) != sector.second.sec_id_.end()) {
-			// 기존 섹터에서 플레이어 정보를 삭제
-			sector.second.mut_sector_.lock();
-			sector.second.sec_id_.erase(id_);
-			sector.second.mut_sector_.unlock();
-			break;
-		}
-	}
 
-	// 현재 sector에 _id 저장
-	g_ObjectSector[new_sector].mut_sector_.lock();
-	g_ObjectSector[new_sector].sec_id_.insert(id_);
-	g_ObjectSector[new_sector].mut_sector_.unlock();
+	// 새 섹터에 먼저 넣고 이전 섹터에서 빼기
+	{
+		std::lock_guard<std::mutex> sec_l(g_ObjectSector[new_sector].mut_sector_);
+		g_ObjectSector[new_sector].sec_id_.insert(id_);
+	}
+	if (old_sector.first >= 0)	// 아직 어느 섹터에도 들어간 적이 없으면 {-99, -99}
+	{
+		std::lock_guard<std::mutex> sec_l(g_ObjectSector[old_sector].mut_sector_);
+		g_ObjectSector[old_sector].sec_id_.erase(id_);
+	}
 }

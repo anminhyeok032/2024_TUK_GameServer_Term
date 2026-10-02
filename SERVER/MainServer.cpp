@@ -233,6 +233,18 @@ void disconnect(int c_id)
 			objects[id]->SendRemoveObjectPacket(c_id);
 		}
 	}
+	// 섹터에서 제거 - current_sector_가 소속 섹터이므로 그 섹터 하나만 락을 잡고 지움
+	{
+		std::pair<int, int> sec = objects[c_id]->current_sector_;
+		if (sec.first >= 0)
+		{
+			std::lock_guard<std::mutex> sec_l(g_ObjectSector[sec].mut_sector_);
+			g_ObjectSector[sec].sec_id_.erase(c_id);
+		}
+		objects[c_id]->current_sector_ = { -99, -99 };
+		objects[c_id]->around_sector_.clear();
+	}
+
 	{
 		std::lock_guard<std::mutex> ll(objects[c_id]->mut_state_);
 		objects[c_id]->state_ = OS_FREE;
@@ -240,25 +252,10 @@ void disconnect(int c_id)
 
 	objects[c_id]->CloseSocket();
 	g_db_request_queue.push({ DBRequest::LOGOUT, c_id });
-	objects[c_id]->current_sector_ = { -99, -99 };
-	objects[c_id]->around_sector_.clear();
 
 	g_mut_player_list.lock();
 	g_player_list.erase(c_id);
 	g_mut_player_list.unlock();
-	
-	// 섹터에서 로그아웃한 id 삭제
-	for (auto& sector : g_ObjectSector)
-	{
-		std::lock_guard<std::mutex> sec_l(sector.second.mut_sector_);
-		{
-			if (sector.second.sec_id_.find(c_id) != sector.second.sec_id_.end()) {
-				// 해당 섹터에서 플레이어 아이디 삭제
-				sector.second.sec_id_.erase(c_id);
-				break;
-			}
-		}
-	}
 }
 
 // 맵 초기화 시 반드시 호출

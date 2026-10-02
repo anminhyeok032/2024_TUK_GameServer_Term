@@ -787,9 +787,21 @@ void Player::ProcessPacket(char* packet, unsigned short packet_size)
 			}
 			
 			// 공격 적용
+			// 섹터 락 안에서는 판정과 상태 변경만 하고 결과를 hits에 모아 두었다가
+			// 락을 푼 뒤에 패킷을 보낸다 (WSASend를 호출하는 동안 섹터 전체가 막히지 않도록)
+			struct AttackHit
+			{
+				int target_id;
+				int exp;					// 처치 시 획득 경험치, 생존 시 0
+				int damage;					// 생존 시 실제 데미지, 사망 시 0
+				bool dead;
+				std::vector<int> viewers;	// 피격 객체를 보고 있는 플레이어 (mut_view_로 보호하며 복사)
+			};
+
 			for(const auto& coord : attack_coord)
 			{
-				std::vector<int> dead_npc_ids; // 사망한 NPC ID 수집용 (좌표마다 초기화)
+				std::vector<AttackHit> hits;	// 좌표마다 초기화
+				bool killed = false;
 
 				// 공격 위치에 맞는 섹터를 얻어서 검사함
 				std::pair<int, int> sector_key = { coord.first / SEC_ROW, coord.second / SEC_COL };
@@ -798,9 +810,9 @@ void Player::ProcessPacket(char* packet, unsigned short packet_size)
 					std::lock_guard<std::mutex> lock(sector.mut_sector_);
 					for (auto& id : sector.sec_id_)
 					{
-					if (id == id_) continue;
-					if (true == IsPlayer(id)) continue;
-					if (true == IsMapItem(id)) continue;
+						if (id == id_) continue;
+						if (true == IsPlayer(id)) continue;
+						if (true == IsMapItem(id)) continue;
 
 						{
 							std::lock_guard<std::mutex> ll(objects[id]->mut_state_);
@@ -810,18 +822,21 @@ void Player::ProcessPacket(char* packet, unsigned short packet_size)
 						if (objects[id]->x_ == coord.first && objects[id]->y_ == coord.second)
 						{
 							// 공격 성공
+							AttackHit hit{ id, 0, damage, false, {} };
 							objects[id]->hp_ -= damage;
 
 							if (objects[id]->hp_ <= 0)
 							{
-								// 사망
+								// 사망 (damage는 0 - 이미 죽었으므로)
 								objects[id]->hp_ = 0;
 								objects[id]->state_ = OS_DEAD;
 
-								dead_npc_ids.push_back(id);
+								hit.dead = true;
+								hit.damage = 0;
+								hit.exp = objects[id]->level_ * objects[id]->level_ * 2;
+								killed = true;
 
-								int getting_exp = objects[id]->level_ * objects[id]->level_ * 2;
-								exp_ += getting_exp;
+								exp_ += hit.exp;
 								int required_exp = static_cast<int>(100 * pow(2, level_ - 1));
 								if (exp_ >= required_exp)
 								{
@@ -830,33 +845,38 @@ void Player::ProcessPacket(char* packet, unsigned short packet_size)
 									//std::cout << "Level up - " << level_ << "!" << std::endl;
 									g_db_request_queue.push({ DBRequest::SAVE_REDIS, id_ });
 								}
-								SendStatChangePacket();
+							}
 
-								// 사망 패킷 + 제거 처리 (damage는 0 - 이미 죽었으므로)
-								for (auto& view_list : objects[id]->view_list_)
-								{
-									objects[view_list]->SendAttackPacket(id_, objects[id]->id_, getting_exp, p->attack_type, p->attack_direction, 0);
-									objects[view_list]->SendRemoveObjectPacket(id);
-								}
-							}
-							else
+							// view_list_는 다른 워커 mut_view_를 잡고 수정하므로 같은 락으로 보호하며 복사
+							// 락 순서: 섹터 -> view (로그인/아이템 드롭 경로와 동일)
 							{
-								// 피격 객체 생존시 데미지 패킷 전송 (실제 데미지 전달)
-								for (auto& view_list : objects[id]->view_list_)
-								{
-									objects[view_list]->SendAttackPacket(id_, objects[id]->id_, 0, p->attack_type, p->attack_direction, damage);
-								}
+								std::lock_guard<std::mutex> vl(objects[id]->mut_view_);
+								hit.viewers.assign(objects[id]->view_list_.begin(), objects[id]->view_list_.end());
 							}
+							hits.push_back(std::move(hit));
 						}
 					}
 				}
 
-				// 섹터 락 해제 후 아이템 드롭 처리
-				for (int npc_id : dead_npc_ids)
+				// ---- 여기부터 섹터 락 밖 ----
+				if (killed) SendStatChangePacket();
+
+				for (const auto& hit : hits)
 				{
-					if (true == IsNpc(npc_id))
+					for (int viewer : hit.viewers)
 					{
-						Npc* npc = dynamic_cast<Npc*>(objects[npc_id].get());
+						// 사망: 사망 패킷 + 제거 처리 / 생존: 실제 데미지 전달
+						objects[viewer]->SendAttackPacket(id_, hit.target_id, hit.exp, p->attack_type, p->attack_direction, hit.damage);
+						if (hit.dead) objects[viewer]->SendRemoveObjectPacket(hit.target_id);
+					}
+				}
+
+				// 섹터 락 해제 후 아이템 드롭 처리
+				for (const auto& hit : hits)
+				{
+					if (hit.dead && true == IsNpc(hit.target_id))
+					{
+						Npc* npc = dynamic_cast<Npc*>(objects[hit.target_id].get());
 						if (npc) npc->DropItem();
 					}
 				}
@@ -892,8 +912,7 @@ void Player::ProcessPacket(char* packet, unsigned short packet_size)
 			if (packet_size < header_size) return;
 			CS_ITEM_SORT_PACKET* p = reinterpret_cast<CS_ITEM_SORT_PACKET*>(packet);
 
-			// 인벤토리 칸 수(100)를 넘는 개수는 존재할 수 없다.
-			// 검증 없이 reserve하면 수십 GB 할당 시도 -> bad_alloc -> 프로세스 종료
+			// 인벤토리 칸 수(100)를 넘는 개수는 존재 불가
 			if (p->item_count < 0 || p->item_count > INV_MAX_COL * INV_MAX_ROW) return;
 			// 선언한 개수만큼의 SortSlot이 실제로 도착했는지 확인
 			if (packet_size < header_size + sizeof(SortSlot) * static_cast<size_t>(p->item_count)) return;

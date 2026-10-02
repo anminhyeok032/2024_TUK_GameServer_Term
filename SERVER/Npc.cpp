@@ -29,6 +29,12 @@ void Npc::DoMove(int target_id)
 		{
 			std::lock_guard<std::mutex> ml{ mut_lua_ };
 			if (L_ == nullptr) SetAiLua();
+			if (L_ == nullptr)
+			{
+				// 다음에 깨어날 때 SetAiLua()를 다시 시도
+				active_ = false;
+				return;
+			}
 
 			lua_getglobal(L_, "event_player_search");
 			lua_pushnumber(L_, final_target); // 검증된 타겟 ID 전달
@@ -213,10 +219,6 @@ bool Npc::IsPlayerExist()
 
 void Npc::WakeUpNpc(int p_id)
 {
-	if (L_ == nullptr)
-	{
-		SetAiLua();
-	}
 	// 이미 활동 중이면 리턴
 	if (active_) return;
 
@@ -288,22 +290,29 @@ bool Npc::IsValidTarget(int target_id)
 	return true;
 }
 
+
+// 호출자는 반드시 mut_lua_를 잡고 있어야 한다 (DoMove)
 void Npc::SetAiLua()
 {
 	// ai로 돌아가는 것만 설정
-	auto L = L_ = luaL_newstate();
+	lua_State* L = luaL_newstate();
+	if (L == nullptr) return;	// 메모리 할당 실패
 	luaL_openlibs(L);
 	// 파일 로드 및 에러 체크
-	if (luaL_loadfile(L_, "npc.lua") || lua_pcall(L_, 0, 0, 0)) {
-		std::cout << "Lua Load Error: " << lua_tostring(L_, -1) << std::endl;
-		L_ = nullptr;
+	if (luaL_loadfile(L, "npc.lua") || lua_pcall(L, 0, 0, 0)) {
+		std::cout << "Lua Load Error: " << lua_tostring(L, -1) << std::endl;
+		lua_close(L);	// 실패한 상태를 버리지 않으면 재시도할 때마다 누수
 		return;
 	}
 
 	lua_getglobal(L, "set_uid");
 	lua_pushnumber(L, id_);
-	if (lua_pcall(L_, 1, 0, 0) != LUA_OK) {
-		std::cout << "Lua Error (set_uid): " << lua_tostring(L_, -1) << std::endl;
+	if (lua_pcall(L, 1, 0, 0) != LUA_OK) 
+	{
+
+		std::cout << "Lua Error (set_uid): " << lua_tostring(L, -1) << std::endl;
+		lua_close(L);
+		return;
 	}
 
 	// C++ API 등록
@@ -311,6 +320,9 @@ void Npc::SetAiLua()
 	lua_register(L, "API_get_xy", API_get_xy);
 	//이동 함수 등록
 	lua_register(L, "API_Move", API_Move);
+
+	// 모든 단계가 성공한 뒤에만 설치
+	L_ = L;
 }
 
 void Npc::DropItem()
