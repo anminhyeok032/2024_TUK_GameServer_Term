@@ -240,13 +240,46 @@ void Player::SendInventorySyncPacket()
 
 void Player::DBLogin(SQLHDBC& hdbc)
 {
-	SQLHSTMT hstmt = AllocateStatement(hdbc);
-	if (!hstmt)
+	// 현재 해당 캐릭터가 접속중인지 확인후, 접속중이라면 중복접속 방지 (SQL/오프라인 모드 공통)
+	for (auto player : g_player_list)
+	{
+		if (player == id_) continue;
+		if (0 == strncmp(name_, objects[player]->name_, sizeof(name_)))
+		{
+			std::wcerr << L"Login Failed: Already logged in." << std::endl;
+
+			SendLoginFailPacket();
+			name_[0] = 0; // 로그인 실패 처리: 로그아웃 시 데이터 저장 방지
+			return;
+		}
+	}
+
+	// 신규 유저 시작 값 - sp_UserLogin이 신규 유저를 INSERT할 때 쓰는 값과 같아야 한다
+	x_ = 0;
+	y_ = 0;
+	max_hp_ = 100;
+	exp_ = 0;
+	level_ = 1;
+	visual_ = 0;
+
+	// SQL 모드: DB 값으로 덮어쓴다 (신규 유저면 sp_UserLogin이 위와 같은 값으로 INSERT한다)
+	// 오프라인 모드: 위 값으로 시작하고, EnterGame의 Redis 복구에서 이전 진행 상황을 덮어쓴다
+	if (hdbc != SQL_NULL_HDBC && false == LoadUserFromSQL(hdbc))
 	{
 		name_[0] = 0; // 로그인 실패 처리: 로그아웃 시 데이터 저장 방지
 		SendLoginFailPacket();
 		return;
 	}
+	hp_ = max_hp_;
+
+	EnterGame(hdbc);
+}
+
+// sp_UserLogin으로 유저 정보를 읽어 멤버에 넣는다. 실패하면 false
+bool Player::LoadUserFromSQL(SQLHDBC& hdbc)
+{
+	SQLHSTMT hstmt = AllocateStatement(hdbc);
+	if (!hstmt) return false;
 	SQLRETURN retcode;
 
 	// Stored Procedure 호출 준비
@@ -255,9 +288,7 @@ void Player::DBLogin(SQLHDBC& hdbc)
 	{
 		DisplayDBError(hstmt, SQL_HANDLE_STMT, retcode);
 		SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
-		name_[0] = 0; // 로그인 실패 처리: 로그아웃 시 데이터 저장 방지
-		SendLoginFailPacket();
-		return;
+		return false;
 	}
 
 	// 파라미터 바인딩 (user_id)
@@ -273,9 +304,7 @@ void Player::DBLogin(SQLHDBC& hdbc)
 	{
 		DisplayDBError(hstmt, SQL_HANDLE_STMT, retcode);
 		SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
-		name_[0] = 0; // 로그인 실패 처리: 로그아웃 시 데이터 저장 방지
-		SendLoginFailPacket();
-		return;
+		return false;
 	}
 
 	// 결과 바인딩
@@ -291,144 +320,128 @@ void Player::DBLogin(SQLHDBC& hdbc)
 	SQLBindCol(hstmt, 6, SQL_C_SLONG, &d_level, 0, &cb_level);
 	SQLBindCol(hstmt, 7, SQL_C_SSHORT, &d_visual, 0, &cb_visual);
 
-	
-	// 현재 해당 캐릭터가 접속중인지 확인후, 접속중이라면 중복접속 방지
-	for (auto player : g_player_list)
-	{
-		if (player == id_) continue;
-		if (0 == strncmp(name_, objects[player]->name_, sizeof(name_)))
-		{
-			std::wcerr << L"Login Failed: Already logged in." << std::endl;
-				
-			SendLoginFailPacket();
-			SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
-			name_[0] = 0; // 로그인 실패 처리: 로그아웃 시 데이터 저장 방지
-			return;
-		}
-	}
-
 	retcode = SQLFetch(hstmt);
-	if (retcode == SQL_SUCCESS)
+	bool ok = (retcode == SQL_SUCCESS);
+	if (ok)
 	{
 		//wprintf(L"Login Success : User ID: %s, Location X: %d, Location Y: %d\n", dId, d_x, d_y);
 		// DB에서 받은 정보 초기화
 		x_ = d_x;
 		y_ = d_y;
 		max_hp_ = d_max_hp;
-		hp_ = max_hp_;
 		exp_ = d_exp;
 		level_ = d_level;
 		visual_ = d_visual;
-		
-		// 서버 크래시시, redis에 정보가 더 최신이면 덮어씌워 주기
-		if (g_redis_client->is_connected())
-		{
-			std::string key(name_);
-			key = "User:" + key;
-
-			auto future_reply = g_redis_client->hgetall(key);
-			g_redis_client->sync_commit();
-
-			auto reply = future_reply.get();
-			if (reply.is_array() && reply.as_array().size() > 0)
-			{
-				//std::cout << "[Recovery] Redis에서 최신 데이터로 복구 : " << name_ << std::endl;
-
-				auto arr = reply.as_array();
-				for (size_t i = 0; i < arr.size(); i += 2) {
-					std::string field = arr[i].as_string();
-					std::string value = arr[i + 1].as_string();
-
-					// SQL 데이터보다 Redis 데이터가 최신이므로 덮어씀
-					if (field == "x") x_ = (short)std::stoi(value);
-					else if (field == "y") y_ = (short)std::stoi(value);
-					else if (field == "hp") hp_ = std::stoi(value);
-					else if (field == "exp") exp_ = std::stoi(value);
-					else if (field == "level") level_ = std::stoi(value);
-				}
-			}
-			// 인벤토리 로드
-			LoadInventoryFromRedis();
-		}
-
-		// Redis에 인벤토리가 없으면 SQL에서 로드 (폴백)
-		if (inventory_ && inventory_->GetAllItems().empty())
-		{
-			DBLoadInventory(hdbc);
-		}
-
-		// 로그인 성공 정보를 Redis에도 갱신
-		SaveToRedis();
-
-		//===============
-		// Login 패킷 전송
-		//===============
-		SendLoginInfoPacket();
-
-		// 인벤토리 전체를 패킷 1개로 한 번에 동기화
-		SendInventorySyncPacket();
-
-		// 자신의 위치 섹터에 넣기
-		PutInSector();
-		// 해당 객체 INGAME 상태로 변경
-		{
-			std::lock_guard<std::mutex> lock(mut_state_);
-			state_ = OS_INGAME;
-		}
-
-		for (auto& sector : around_sector_)
-		{
-			{
-				// 섹터에 대해 lock
-				std::lock_guard<std::mutex> sec_l(g_ObjectSector[sector].mut_sector_);
-				for (auto& id : g_ObjectSector[sector].sec_id_)
-				{
-					{
-						std::lock_guard<std::mutex> ll(objects[id]->mut_state_);
-						if (OS_INGAME != objects[id]->state_) continue;
-					}
-
-					if (false == CanSee(id_, objects[id]->id_))	continue;
-					if (objects[id]->id_ == id_)	continue;	// 자기자신일때
-					
-					// MapItem 처리 추가
-					if (true == IsMapItem(objects[id]->id_)) 
-					{
-						// 내 view_list_에 MapItem 추가 후 패킷 전송
-						mut_view_.lock();
-						view_list_.insert(objects[id]->id_);
-						mut_view_.unlock();
-						objects[id]->SendAddObjectPacket(id_); // MapItem -> Me
-					} 
-					else 
-					{
-						// NPC일 경우 접속한 플레이어를 인식하고 바로 깨어나도록 처리
-						if (IsNpc(objects[id]->id_))
-						{
-							Npc* npc = dynamic_cast<Npc*>(objects[id].get());
-							if (npc)
-							{
-								npc->WakeUpNpc(id_);
-							}
-						}
-						objects[id]->SendAddObjectPacket(id_); // Other -> Me
-					}
-					
-					SendAddObjectPacket(objects[id]->id_); // Me -> Other
-				}
-			}
-		}
 	}
 	else
 	{
 		DisplayDBError(hstmt, SQL_HANDLE_STMT, retcode);
-		name_[0] = { 0, };
-		SendLoginFailPacket();
 	}
 
-	if (hstmt) 
+	SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
+	return ok;
+}
+
+// 로그인 성공 후 게임 입장 (SQL/오프라인 모드 공통)
+void Player::EnterGame(SQLHDBC& hdbc)
+{
+	// 서버 크래시시, redis에 정보가 더 최신이면 덮어씌워 주기
+	if (g_redis_client->is_connected())
 	{
-		SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
+		std::string key(name_);
+		key = "User:" + key;
+
+		auto future_reply = g_redis_client->hgetall(key);
+		g_redis_client->sync_commit();
+
+		auto reply = future_reply.get();
+		if (reply.is_array() && reply.as_array().size() > 0)
+		{
+			//std::cout << "[Recovery] Redis에서 최신 데이터로 복구 : " << name_ << std::endl;
+
+			auto arr = reply.as_array();
+			for (size_t i = 0; i < arr.size(); i += 2) {
+				std::string field = arr[i].as_string();
+				std::string value = arr[i + 1].as_string();
+
+				// SQL 데이터보다 Redis 데이터가 최신이므로 덮어씀
+				if (field == "x") x_ = (short)std::stoi(value);
+				else if (field == "y") y_ = (short)std::stoi(value);
+				else if (field == "hp") hp_ = std::stoi(value);
+				else if (field == "exp") exp_ = std::stoi(value);
+				else if (field == "level") level_ = std::stoi(value);
+			}
+		}
+		// 인벤토리 로드
+		LoadInventoryFromRedis();
+	}
+
+	// Redis에 인벤토리가 없으면 SQL에서 로드 (폴백)
+	if (inventory_ && inventory_->GetAllItems().empty())
+	{
+		DBLoadInventory(hdbc);
+	}
+
+	// 로그인 성공 정보를 Redis에도 갱신
+	SaveToRedis();
+
+	//===============
+	// Login 패킷 전송
+	//===============
+	SendLoginInfoPacket();
+
+	// 인벤토리 전체를 패킷 1개로 한 번에 동기화
+	SendInventorySyncPacket();
+
+	// 자신의 위치 섹터에 넣기
+	PutInSector();
+	// 해당 객체 INGAME 상태로 변경
+	{
+		std::lock_guard<std::mutex> lock(mut_state_);
+		state_ = OS_INGAME;
+	}
+
+	for (auto& sector : around_sector_)
+	{
+		{
+			// 섹터에 대해 lock
+			std::lock_guard<std::mutex> sec_l(g_ObjectSector[sector].mut_sector_);
+			for (auto& id : g_ObjectSector[sector].sec_id_)
+			{
+				{
+					std::lock_guard<std::mutex> ll(objects[id]->mut_state_);
+					if (OS_INGAME != objects[id]->state_) continue;
+				}
+
+				if (false == CanSee(id_, objects[id]->id_))	continue;
+				if (objects[id]->id_ == id_)	continue;	// 자기자신일때
+				
+				// MapItem 처리 추가
+				if (true == IsMapItem(objects[id]->id_)) 
+				{
+					// 내 view_list_에 MapItem 추가 후 패킷 전송
+					mut_view_.lock();
+					view_list_.insert(objects[id]->id_);
+					mut_view_.unlock();
+					objects[id]->SendAddObjectPacket(id_); // MapItem -> Me
+				} 
+				else 
+				{
+					// NPC일 경우 접속한 플레이어를 인식하고 바로 깨어나도록 처리
+					if (IsNpc(objects[id]->id_))
+					{
+						Npc* npc = dynamic_cast<Npc*>(objects[id].get());
+						if (npc)
+						{
+							npc->WakeUpNpc(id_);
+						}
+					}
+					objects[id]->SendAddObjectPacket(id_); // Other -> Me
+				}
+				
+				SendAddObjectPacket(objects[id]->id_); // Me -> Other
+			}
+		}
 	}
 }
 
@@ -437,8 +450,28 @@ void Player::DBLogout(SQLHDBC& hdbc)
 	// 로그인에 실패했거나 접속만 하고 패킷을 보내지 않은 클라이언트는 무시
 	if (name_[0] == 0) return;
 
+	// SQL 모드: SQL에 저장 / 오프라인 모드: 건너뛴다
+	bool sql_saved = true;
+	if (hdbc != SQL_NULL_HDBC)
+	{
+		sql_saved = SaveUserToSQL(hdbc);
+		if (sql_saved) DBSaveInventory(hdbc);
+	}
+
+	// Redis에서 데이터를 영구저장 안함 - 패킷 받을 때 조회를 위해
+	// 접속중 상태만 갱신하고 TTL을 7일로 재설정함 -> 7일 초과시 삭제
+	// SQL 저장 결과와 무관하게 항상 저장한다: SQL 저장이 실패해도 다음 로그인 때 Redis에서 복구된다
+	SaveToRedis();
+
+	// SQL 저장에 실패했으면 이름을 남겨 둔다 (기존 동작)
+	if (sql_saved) name_[0] = 0;
+}
+
+// sp_UserLogout으로 좌표/체력/경험치/레벨을 저장한다. 실패하면 false
+bool Player::SaveUserToSQL(SQLHDBC& hdbc)
+{
 	SQLHSTMT hstmt = AllocateStatement(hdbc);
-	if (!hstmt) return;
+	if (!hstmt) return false;
 	SQLRETURN retcode;
 
 	std::wstring w_user_id(name_, name_ + strlen(name_));
@@ -448,7 +481,7 @@ void Player::DBLogout(SQLHDBC& hdbc)
 	if (retcode != SQL_SUCCESS && retcode != SQL_SUCCESS_WITH_INFO) {
 		DisplayDBError(hstmt, SQL_HANDLE_STMT, retcode);
 		SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
-		return;
+		return false;
 	}
 
 	// 파라미터 바인딩
@@ -467,19 +500,11 @@ void Player::DBLogout(SQLHDBC& hdbc)
 
 	// 실행
 	retcode = SQLExecute(hstmt);
-	if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO)
+	bool ok = (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO);
+	if (ok)
 	{
 		std::wcout << "[" << name_ << L"] : Logout successful, data saved. "
 			<< L"x = " << x_ << L", y = " << y_ << std::endl;
-
-
-		// Redis에서 데이터를 영구저장 안함 - 패킷 받을 때 조회를 위해
-		// 접속중 상태만 갱신하고 TTL을 7일로 재설정함 -> 7일 초과시 삭제
-		SaveToRedis();
-
-		DBSaveInventory(hdbc);
-
-		name_[0] = 0;
 	}
 	else
 	{
@@ -487,6 +512,7 @@ void Player::DBLogout(SQLHDBC& hdbc)
 	}
 
 	SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
+	return ok;
 }
 
 void Player::SendAttackPacket(int attacker_id, int damaged_id, int exp, char attack_type, char direction, int damage)
@@ -1172,6 +1198,7 @@ void Player::DeleteFromRedis()
 
 void Player::DBSaveInventory(SQLHDBC& hdbc)
 {
+	if (hdbc == SQL_NULL_HDBC) return;	// 오프라인 모드: SQL 저장 없음 (Redis는 호출한 쪽에서 처리)
 	if (!inventory_) return;
 
 	std::wstring w_user_id(name_, name_ + strlen(name_));
@@ -1277,6 +1304,7 @@ void Player::DBSaveInventory(SQLHDBC& hdbc)
 
 void Player::DBLoadInventory(SQLHDBC& hdbc)
 {
+	if (hdbc == SQL_NULL_HDBC) return;	// 오프라인 모드: SQL에서 읽지 않음 (Redis 인벤토리만 사용)
 	if (!inventory_) return;
 
 	SQLHSTMT hstmt = AllocateStatement(hdbc);
@@ -1343,6 +1371,7 @@ void Player::DBLoadInventory(SQLHDBC& hdbc)
 
 bool Player::DBSaveItem(SQLHDBC& hdbc, long long item_uid)
 {
+	if (hdbc == SQL_NULL_HDBC) return false;	// 오프라인 모드: SQL 저장 없음 (Redis는 호출한 쪽에서 처리)
 	if (!inventory_) return false;
 
 	Item* target = inventory_->FindItem(item_uid);
@@ -1388,6 +1417,7 @@ bool Player::DBSaveItem(SQLHDBC& hdbc, long long item_uid)
 
 bool Player::DBDeleteItem(SQLHDBC& hdbc, long long item_uid)
 {
+	if (hdbc == SQL_NULL_HDBC) return false;	// 오프라인 모드: SQL 저장 없음 (Redis는 호출한 쪽에서 처리)
 	SQLHSTMT hstmt = AllocateStatement(hdbc);
 	if (!hstmt) return false;
 

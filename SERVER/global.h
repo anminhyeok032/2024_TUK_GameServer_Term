@@ -83,7 +83,7 @@ extern concurrency::concurrent_queue<DBRequest> g_db_request_queue;
 
 // DB
 void DisplayDBError(SQLHANDLE hHandle, SQLSMALLINT hType, RETCODE RetCode);
-SQLHDBC ConnectWithDataBase();
+SQLHDBC ConnectWithDataBase(bool force_offline);	// SQL을 쓸 수 없으면 SQL_NULL_HDBC (오프라인 모드)
 SQLHSTMT AllocateStatement(SQLHDBC hdbc);
 void DBWoker(SQLHDBC hdbc);
 void ProcessDBRequest(const DBRequest& request, SQLHDBC& hdbc);

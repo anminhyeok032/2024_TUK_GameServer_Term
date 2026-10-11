@@ -32,6 +32,7 @@ inline std::string RTrim(std::string s)
 void RankingManager::LoadAllRankingsFromSQL(SQLHDBC hdbc)
 {
     if (!g_redis_client || !g_redis_client->is_connected()) return;
+    if (hdbc == SQL_NULL_HDBC) return;     // 오프라인 모드: Redis에 이미 있는 랭킹만 사용
     std::cout << "[Ranking] SQL -> Redis 동기화 시작...\n";
 
     SQLHSTMT hstmt;

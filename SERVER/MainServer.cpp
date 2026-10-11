@@ -330,7 +330,7 @@ void RankingManagerThread()
 }
 
 
-int main()
+int main(int argc, char* argv[])
 {
 	std::wcout.imbue(std::locale("korean"));
 	// main start logic
@@ -366,8 +366,11 @@ int main()
 		return 0; 
 	}
 
-	// DB 연결자 생성
-	SQLHDBC hdbc = ConnectWithDataBase();
+	// DB 연결자 생성 - SQL을 쓸 수 없으면 SQL_NULL_HDBC, 이후 SQL 단계를 건너뛰고 Redis만 사용한다
+	bool force_offline = (argc > 1 && strcmp(argv[1], "--offline") == 0);
+	SQLHDBC hdbc = ConnectWithDataBase(force_offline);
+	if (hdbc == SQL_NULL_HDBC)
+		std::cout << "[DB] 오프라인 모드 - SQL 없이 실행합니다. 진행 상황은 Redis에만 저장됩니다 (7일).\n";
 	RankingManager::GetInstance()->LoadAllRankingsFromSQL(hdbc);
 	
 	std::thread db_thread(DBWoker, hdbc);

@@ -62,4 +62,9 @@ public:
 	void ProcessPacket(char* packet, unsigned short packet_size) override;
 
 	void DeleteFromRedis();
+private:
+	// DBLogin / DBLogout의 단계 - SQL 함수는 SQL 모드(hdbc != SQL_NULL_HDBC)에서만 호출
+	bool LoadUserFromSQL(SQLHDBC& hdbc);	// sp_UserLogin (신규 유저면 INSERT 후 같은 값 반환)
+	bool SaveUserToSQL(SQLHDBC& hdbc);		// sp_UserLogout
+	void EnterGame(SQLHDBC& hdbc);			// Redis 복구, 인벤토리, 로그인 패킷, 섹터 입장
 };

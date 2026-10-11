@@ -19,25 +19,47 @@
 
 ## 실행 방법
 
+[![build](https://github.com/anminhyeok032/2024_TUK_GameServer_Term/actions/workflows/build.yml/badge.svg)](https://github.com/anminhyeok032/2024_TUK_GameServer_Term/actions/workflows/build.yml)
+
+### 다운로드 (빌드 없이 실행)
+
+| 종류 | 받는 곳 |
+|---|---|
+| 개발 빌드 (main 최신 커밋, push할 때마다 자동 갱신) | [GameServer.zip](https://github.com/anminhyeok032/2024_TUK_GameServer_Term/releases/download/latest/GameServer.zip) · [GameClient.zip](https://github.com/anminhyeok032/2024_TUK_GameServer_Term/releases/download/latest/GameClient.zip) |
+| 정식 버전 | [Releases](https://github.com/anminhyeok032/2024_TUK_GameServer_Term/releases)에서 `v`로 시작하는 릴리스 |
+
+- 두 프로그램 모두 [Visual C++ 재배포 패키지 (x64)](https://aka.ms/vs/17/release/vc_redist.x64.exe)가 필요합니다. (대부분의 PC에는 이미 설치되어 있습니다)
+
 ### 서버 실행
 
-1. Visual Studio 2022로 서버 프로젝트 열기  
-2. **Redis Server** 실행  
+1. **Redis Server** 실행 (필수)  
    - 로컬(`127.0.0.1`)의 기본 포트(`6379`)에서 Redis 서버가 동작 중이어야 합니다.  
-3. `MSSQL`에서 제공된 `2024_GameServer.bak` 파일 복원  
-4. ODBC 데이터 소스 관리자 설정
-   - **사용자 DSN > 추가 > SQL Server**  
-   - **ODBC 이름을 `2024_GameServer`로 설정**, 연결할 SQL Server 선택  
-5. 2024_GameServer_Term.exe 실행  
+2. `GameServer.zip`을 푼 폴더에서 `2024_GameServer_Term.exe` 실행 (`npc.lua`와 같은 폴더에 있어야 합니다)  
+
+SQL Server는 **선택**입니다. 시작할 때 아래 조건을 확인해서 모드를 정합니다.
+
+| 상황 | 모드 | 진행 상황 저장 |
+|---|---|---|
+| ODBC DSN `2024_GameServer`가 있고, 서버가 쓰는 테이블·저장 프로시저가 모두 있음 | SQL 모드 | SQL (영구) + Redis |
+| DSN이 없음 / SQL Server에 연결할 수 없음 (3회 시도) / 테이블·프로시저가 없음 | 오프라인 모드 | Redis만 (7일, 접속할 때마다 연장) |
+| `2024_GameServer_Term.exe --offline`으로 실행 | 오프라인 모드 | Redis만 |
 
 ### 클라이언트 실행
 
-1. Visual Studio 2022로 클라이언트 프로젝트 열기  
-2. 실행 시 콘솔 창에서 **서버 IP 입력**  
-3. **사용할 ID 입력**  
-   - 존재하지 않으면 자동 생성 → DB에 INSERT  
-   - 존재할 경우 → 마지막 좌표/레벨/체력으로 이어서 접속  
+1. `GameClient.zip`을 푼 폴더에서 `client.exe` 실행 (`Resources` 폴더와 같은 폴더에 있어야 합니다)
+2. 실행 시 콘솔 창에서 **서버 IP 입력**
+3. **사용할 ID 입력**
+   - 존재하지 않으면 자동 생성 → DB에 INSERT
+   - 존재할 경우 → 마지막 좌표/레벨/체력으로 이어서 접속
    - **이미 접속 중인 ID는 차단됨**
+
+### 직접 빌드
+
+1. Visual Studio 2022 (C++ 데스크톱 개발, v143 도구 집합)
+2. [vcpkg](https://github.com/microsoft/vcpkg) 설치 후 `vcpkg integrate install` 1회 실행
+3. `SERVER/2024_GameServer_Term.sln`, `CLIENT/client.sln`을 열고 `Release | x64`로 빌드
+   - 서버의 cpp_redis는 `SERVER/vcpkg.json`에 따라 첫 빌드 때 자동으로 설치됩니다.
+   - 클라이언트의 SFML은 NuGet 패키지로 자동 복원됩니다.
 
 
 
@@ -57,9 +79,11 @@
 ## 프로젝트 구조
 ```text
 2024_TUK_GameServer_Term/
+├── .github/workflows/build.yml   # 빌드·배포 (GitHub Actions → Releases)
 ├── SERVER/
 │ ├── DB           # ODBC + MSSQL 연동 관련 DB 작업 및 쿼리 처리
-│ │ └── 2024_GameServer.bak
+│ ├── sql/         # 저장 프로시저
+│ ├── vcpkg.json   # 서버 외부 라이브러리 (cpp_redis)
 │ ├── MainServer   # 서버 진입점. IOCP 초기화 및 쓰레드풀, accept 처리 등
 │ ├── Player       # 플레이어 상태, 입력, 충돌, 이동 및 전투 처리
 │ ├── Session      # 세션 구조 관리 (세션별 플레이어 컨테이너 및 시야처리 등)
