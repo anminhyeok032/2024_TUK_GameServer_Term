@@ -23,3 +23,15 @@
 *.pptx
 *.fi
 *.vcxproj.user
+
+# 빌드 결과물과 DB 백업 - 배포는 GitHub Releases로 한다 (.github/workflows/build.yml)
+*.exe
+*.bak
+/dist
+
+# vcpkg 매니페스트 모드가 빌드 때 내려받는 라이브러리 (SERVER/vcpkg.json)
+/SERVER/vcpkg_installed
+
+# 개인 환경 파일
+.vscode/
+desktop.ini
