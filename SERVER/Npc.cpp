@@ -3,6 +3,43 @@
 #include "Player.h"
 #include "MapItem.h" // 맵 아이템 추가를 위해 헤더 포함
 
+namespace
+{
+	// 워커 스레드마다 하나씩 두는 AI Lua 상태 - 만든 스레드만 쓰므로 락이 필요 없다
+	// 스레드가 끝날 때(서버 종료) 소멸자에서 닫는다
+	struct AiLua
+	{
+		lua_State* L = nullptr;
+		~AiLua() { if (L) lua_close(L); }
+	};
+	thread_local AiLua t_ai_lua;
+
+	lua_State* CreateAiLua()
+	{
+		lua_State* L = luaL_newstate();
+		if (L == nullptr) return nullptr;	// 메모리 할당 실패
+		luaL_openlibs(L);
+		// C++ API를 먼저 등록 - 스크립트 최상위 코드가 API를 부르더라도 동작하게
+		lua_register(L, "API_Attack", API_Attack);
+		lua_register(L, "API_get_xy", API_get_xy);
+		lua_register(L, "API_Move", API_Move);
+		// 파일 로드 및 에러 체크
+		if (luaL_loadfile(L, "npc.lua") || lua_pcall(L, 0, 0, 0)) {
+			std::cout << "Lua Load Error: " << lua_tostring(L, -1) << std::endl;
+			lua_close(L);	// 실패한 상태는 버리고 다음 호출에서 다시 시도
+			return nullptr;
+		}
+		return L;
+	}
+
+	// 이 스레드의 AI Lua 상태. 처음 부를 때 만든다
+	lua_State* GetAiLua()
+	{
+		if (t_ai_lua.L == nullptr) t_ai_lua.L = CreateAiLua();
+		return t_ai_lua.L;
+	}
+}
+
 void Npc::DoMove(int target_id)
 {
 	// 타입에 따라 다른 AI 로직 수행
@@ -26,23 +63,21 @@ void Npc::DoMove(int target_id)
 		}
 
 		// Lua 스크립트 실행 (이동 방향 결정 등)
+		lua_State* L = GetAiLua();
+		if (L == nullptr)
 		{
-			std::lock_guard<std::mutex> ml{ mut_lua_ };
-			if (L_ == nullptr) SetAiLua();
-			if (L_ == nullptr)
-			{
-				// 다음에 깨어날 때 SetAiLua()를 다시 시도
-				active_ = false;
-				return;
-			}
+			// 다음에 깨어날 때 다시 시도
+			active_ = false;
+			return;
+		}
 
-			lua_getglobal(L_, "event_player_search");
-			lua_pushnumber(L_, final_target); // 검증된 타겟 ID 전달
+		lua_getglobal(L, "event_player_search");
+		lua_pushinteger(L, id_);			// 자기 id (상태를 여러 NPC가 같이 쓰므로 매번 넘긴다)
+		lua_pushinteger(L, final_target);	// 검증된 타겟 ID 전달
 
-			if (lua_pcall(L_, 1, 0, 0) != LUA_OK) {
-				std::cout << "Lua Error: " << lua_tostring(L_, -1) << std::endl;
-				lua_pop(L_, 1);
-			}
+		if (lua_pcall(L, 2, 0, 0) != LUA_OK) {
+			std::cout << "Lua Error: " << lua_tostring(L, -1) << std::endl;
+			lua_pop(L, 1);
 		}
 
 		// 다음 행동 예약
@@ -290,40 +325,6 @@ bool Npc::IsValidTarget(int target_id)
 	return true;
 }
 
-
-// 호출자는 반드시 mut_lua_를 잡고 있어야 한다 (DoMove)
-void Npc::SetAiLua()
-{
-	// ai로 돌아가는 것만 설정
-	lua_State* L = luaL_newstate();
-	if (L == nullptr) return;	// 메모리 할당 실패
-	luaL_openlibs(L);
-	// 파일 로드 및 에러 체크
-	if (luaL_loadfile(L, "npc.lua") || lua_pcall(L, 0, 0, 0)) {
-		std::cout << "Lua Load Error: " << lua_tostring(L, -1) << std::endl;
-		lua_close(L);	// 실패한 상태를 버리지 않으면 재시도할 때마다 누수
-		return;
-	}
-
-	lua_getglobal(L, "set_uid");
-	lua_pushnumber(L, id_);
-	if (lua_pcall(L, 1, 0, 0) != LUA_OK) 
-	{
-
-		std::cout << "Lua Error (set_uid): " << lua_tostring(L, -1) << std::endl;
-		lua_close(L);
-		return;
-	}
-
-	// C++ API 등록
-	lua_register(L, "API_Attack", API_Attack);
-	lua_register(L, "API_get_xy", API_get_xy);
-	//이동 함수 등록
-	lua_register(L, "API_Move", API_Move);
-
-	// 모든 단계가 성공한 뒤에만 설치
-	L_ = L;
-}
 
 void Npc::DropItem()
 {

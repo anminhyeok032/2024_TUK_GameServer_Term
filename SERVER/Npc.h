@@ -5,8 +5,6 @@ class Npc : public SESSION
 {
 public:
 	int start_x_, start_y_;
-	lua_State* L_ = nullptr;	// 사용자 정의 생성자는 멤버를 0으로 채우지 않으므로 명시적으로 초기화
-	std::mutex mut_lua_;
 	std::atomic_bool active_;
 
 public:
@@ -15,8 +13,6 @@ public:
 
 	void SetActive(bool active) { active_ = active; }
 	bool GetActive() { return active_; }
-
-	void SetLua(lua_State* L) { L_ = L; }
 
 	void SendAddObjectPacket(int c_id);
 	void SendRemoveObjectPacket(int c_id);
@@ -27,7 +23,6 @@ public:
 	void WakeUpNpc(int p_id);
 	int GetNearestPlayerId();
 	bool IsValidTarget(int target_id);
-	void SetAiLua();
 	void DoMove(int target_id);
 	void Move(int dir);
 
